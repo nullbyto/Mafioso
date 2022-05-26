@@ -6,4 +6,5 @@
 SOCKET connect();
 
 void disconnect(SOCKET sock);
-std::string recieve_data(SOCKET& ConnectSocket);
+char* recieve_data(SOCKET& ConnectSocket);
+bool send_data(SOCKET& ConnectSocket, const char* sendbuf);

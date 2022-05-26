@@ -26,6 +26,15 @@
 #include "ftxui/component/screen_interactive.hpp"  // for ScreenInteractive
 #include "ftxui/dom/elements.hpp"  // for separator, gauge, text, Element, operator|, vbox, border
 
+// FTXUI - Input
+#include "ftxui/component/captured_mouse.hpp"  // for ftxui
+#include "ftxui/component/component.hpp"       // for Input, Renderer, Vertical
+#include "ftxui/component/component_base.hpp"  // for ComponentBase
+#include "ftxui/component/component_options.hpp"  // for InputOption
+#include "ftxui/component/screen_interactive.hpp"  // for Component, ScreenInteractive
+#include "ftxui/dom/elements.hpp"  // for text, hbox, separator, Element, operator|, vbox, border
+#include "ftxui/util/ref.hpp"  // for Ref
+
 // Game
 #include "connection.h"
 #include "../server/room.h"
@@ -38,31 +47,60 @@ void handle_player () {
 
     using namespace ftxui;
 	system("cls");
+
+    /////////////////////////////////////////////////////////////////
+    // Send name
+    std::string name_buf;
+    auto screen_name = ScreenInteractive::TerminalOutput();
+    InputOption option_input;
+    option_input.on_enter = screen_name.ExitLoopClosure();
+    Component input_name = Input(&name_buf, "your name here", option_input);
+
+    auto component_input = Container::Vertical({
+        input_name,
+    });
+
+    auto renderer = Renderer(component_input, [&] {
+        return vbox({
+                   hbox(text("Player name: "), input_name->Render()),
+            }) |
+            border;
+    });
+
+    
+    
+    screen_name.Loop(renderer);
+
+    system("cls");
+    
+    /////////////////////////////////////////////////////////////////
+
     // hbox
         Element document =
         hbox({
             text("Room List") | ftxui::border | flex,
             });
 
-    auto screen = Screen::Create(
+    auto screen_top = Screen::Create(
         Dimension::Full(),       // Width
         Dimension::Fit(document) // Height
     );
-    Render(screen, document);
-    screen.Print();
+    ftxui::Render(screen_top, document);
+    screen_top.Print();
 
     std::cout << std::endl;
 
     /////////////////////////////////////////////////////////////////
     // Recieve rooms
-    //std::vector<Room> rooms;
-    //auto rooms_str = recieve_data(ConnectSocket);
+
+    /*std::vector<Room> rooms;
+    auto rooms_str = recieve_data(ConnectSocket);*/
 
 
     /////////////////////////////////////////////////////////////////
 
     // Menu
-    auto screen1 = ScreenInteractive::TerminalOutput();
+    auto screen = ScreenInteractive::TerminalOutput();
 
     std::vector<std::string> entries = {
         "entry 1",
@@ -72,7 +110,7 @@ void handle_player () {
     int selected = 0;
 
     MenuOption option;
-    option.on_enter = screen1.ExitLoopClosure();
+    option.on_enter = screen.ExitLoopClosure();
     auto menu = Menu(&entries, &selected, &option);
     //auto menu = Menu(&entries, &selected);
 
@@ -100,6 +138,6 @@ void handle_player () {
             });
         });
 
-    screen1.Loop(component);
+    screen.Loop(component);
     //std::cout << selected;
 }

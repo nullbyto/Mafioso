@@ -1,6 +1,12 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <iostream>
+#include <vector>
+
+#include "nlohmann/json.hpp"
+using json = nlohmann::json;
+
+#include "room.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -81,7 +87,7 @@ SOCKET startup() {
 	return ListenSocket;
 }
 
-void handle_client(SOCKET &ListenSocket) {
+void handle_client(SOCKET &ListenSocket, std::vector<Room> rooms) {
 	SOCKET ClientSocket;
 	int iResult;
 
@@ -96,16 +102,22 @@ void handle_client(SOCKET &ListenSocket) {
 		return;
 	}
 
+	
+
+
+	//iResult = send(ClientSocket, (char*)&rooms, size(rooms), 0);
+	return;
+
 	char recv_buf[DEFAULT_BUFLEN];
 	int recv_buf_len = DEFAULT_BUFLEN;
 	int iSendResult;
 
-	iResult = recv(ClientSocket, recv_buf, recv_buf_len, 0);
+	//iResult = recv(ClientSocket, recv_buf, recv_buf_len, 0);
 	if (iResult > 0) {
 		//printf("Bytes received: %d\n", iResult);
-		std::string msg;
+		/*std::string msg;
 		msg.append(recv_buf);
-		std::cout << "Msg: " << msg.substr(0, iResult) << std::endl;
+		std::cout << "Msg: " << msg.substr(0, iResult) << std::endl;*/
 
 		// Echo the buffer back to the sender
 		iSendResult = send(ClientSocket, recv_buf, iResult, 0);

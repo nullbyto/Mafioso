@@ -63,16 +63,19 @@ void shutdown_send(SOCKET &ConnectSocket) {
 	}
 }
 
-std::string recieve_data(SOCKET &ConnectSocket) {
-	char recv_buf[DEFAULT_BUFLEN];
+char* recieve_data(SOCKET &ConnectSocket) {
+	//char recv_buf[DEFAULT_BUFLEN];
+	char* recv_buf = new char[DEFAULT_BUFLEN];
 	int recv_buf_len = DEFAULT_BUFLEN;
 	int iResult;
 
+	//iResult = recv(ConnectSocket, recv_buf, recv_buf_len, 0);
 	iResult = recv(ConnectSocket, recv_buf, recv_buf_len, 0);
 	if (iResult > 0) {
-		std::string msg;
+		/*std::string msg;
 		msg.append(recv_buf);
-		return msg.substr(0, iResult);
+		return msg.substr(0, iResult);*/
+		return recv_buf;
 	}
 	else if (iResult == 0) {
 		printf("Connection closed\n");

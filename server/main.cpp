@@ -1,5 +1,5 @@
 #include "connection.h"
-//#include "room.h"
+#include "room.h"
 #include <iostream>
 
 int main() {
@@ -9,9 +9,9 @@ int main() {
 		std::cout << "Server started successfully!" << std::endl;
 	}
 
-	//std::vector<Room> rooms;
+	std::vector<Room> rooms;
 
-	handle_client(ListenSocket);
+	handle_client(ListenSocket, rooms);
 
 
 	return 0;
