@@ -49,7 +49,7 @@ void handle_player () {
 	system("cls");
 
     /////////////////////////////////////////////////////////////////
-    // Send name
+    // Input and send name
     std::string name_buf;
     auto screen_name = ScreenInteractive::TerminalOutput();
     InputOption option_input;
@@ -66,12 +66,11 @@ void handle_player () {
             }) |
             border;
     });
-
-    
-    
     screen_name.Loop(renderer);
 
     system("cls");
+
+    send_data(ConnectSocket, name_buf.data());
     
     /////////////////////////////////////////////////////////////////
 

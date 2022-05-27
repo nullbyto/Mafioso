@@ -2,6 +2,8 @@
 #include <ws2tcpip.h>
 #include <iostream>
 #include <vector>
+#include <string>
+#include <stdio.h>
 
 #include "nlohmann/json.hpp"
 using json = nlohmann::json;
@@ -87,6 +89,53 @@ SOCKET startup() {
 	return ListenSocket;
 }
 
+char* getipaddr(SOCKET s, bool port)
+{
+	sockaddr_in SockAddr;
+	int addrlen = sizeof(SockAddr);
+
+	if (getsockname(s, (LPSOCKADDR)&SockAddr, &addrlen) == SOCKET_ERROR)
+	{
+		//err = WSAGetLastError();
+		return NULL;
+	}
+
+	if (port)
+	{
+		char* portstr = new char[6];
+		sprintf_s(portstr, 6, "%d", htons(SockAddr.sin_port));
+
+		return portstr;
+	}
+
+	char* ipstr = new char[16];
+	inet_ntop(AF_INET, &SockAddr.sin_addr, ipstr, 16);
+
+	return ipstr;
+}
+
+int recieve_data(SOCKET& ConnectSocket, std::vector<char> &buf) {
+	//char* recv_buf = new char[DEFAULT_BUFLEN];
+	//int recv_buf_len = DEFAULT_BUFLEN;
+	int iResult;
+
+	iResult = recv(ConnectSocket, &buf[0], buf.size(), 0);
+	if (iResult > 0) {
+		/*std::string msg;
+		msg.append(recv_buf);
+		return msg.substr(0, iResult);*/
+		return iResult;
+	}
+	else if (iResult == 0) {
+		printf("Connection closed\n");
+		return iResult;
+	}
+	else
+		return iResult;
+
+	printf("recv failed: %d\n", WSAGetLastError());
+}
+
 void handle_client(SOCKET &ListenSocket, std::vector<Room> rooms) {
 	SOCKET ClientSocket;
 	int iResult;
@@ -102,10 +151,20 @@ void handle_client(SOCKET &ListenSocket, std::vector<Room> rooms) {
 		return;
 	}
 
+	/////////////////////////////////////////////////////////////////
+	// Recieve name
 	
+	std::vector<char> name_buf(512);
+	std::string client_name;
 
+	auto ip_str = getipaddr(ClientSocket, 0);
+	if (recieve_data(ClientSocket, name_buf) > 0) {
+		client_name.append(name_buf.cbegin(), name_buf.cend());
+		std::cout << "[" << ip_str << "] " << client_name << " joined the server.";
+	}
 
-	//iResult = send(ClientSocket, (char*)&rooms, size(rooms), 0);
+	/////////////////////////////////////////////////////////////////
+
 	return;
 
 	char recv_buf[DEFAULT_BUFLEN];
