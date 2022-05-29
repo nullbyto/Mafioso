@@ -21,7 +21,7 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{b4f13340-aa87-4b4f-8018-9a9ea3e74644}</ProjectGuid>
+    <ProjectGuid>{4C317889-B472-426C-830C-459005337F61}</ProjectGuid>
     <RootNamespace>Mafioso</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <ProjectName>client</ProjectName>

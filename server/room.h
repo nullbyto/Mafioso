@@ -23,8 +23,8 @@ public:
 	std::vector<Player> players;
 	Settings settings;
 
-	/*Room(int count, std::string name, Player leader, std::vector<Player> players, Settings settings);
-	~Room();*/
+	Room(int count, std::string name, Player leader, std::vector<Player> players, Settings settings);
+	~Room();
 
 private:
 

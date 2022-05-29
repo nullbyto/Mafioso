@@ -1,14 +1,5 @@
 #include <string>
-
-class Role
-{
-public:
-	Role();
-	~Role();
-
-private:
-	std::string name;
-};
+#include "role.h"
 
 Role::Role()
 {
@@ -16,5 +7,4 @@ Role::Role()
 
 Role::~Role()
 {
-	delete this;
 }

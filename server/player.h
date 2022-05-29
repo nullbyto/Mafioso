@@ -11,7 +11,7 @@ public:
 	SOCKET socket;
 	Role role;
 
-	Player();
+	Player() = default;
 	Player(std::string name, SOCKET socket, Role role);
 	~Player();
 
