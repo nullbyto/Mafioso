@@ -70,7 +70,8 @@ void handle_player () {
 
     system("cls");
 
-    send_data(ConnectSocket, name_buf.data());
+    if (send_data(ConnectSocket, name_buf.data()) != true)
+        return;
     
     /////////////////////////////////////////////////////////////////
 

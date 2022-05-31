@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{fa972213-2e10-4f4d-a406-7951d2687a6b}</ProjectGuid>
-    <RootNamespace>server</RootNamespace>
+    <ProjectGuid>{1c89cb28-d766-4f4a-a234-c61fed7d5fde}</ProjectGuid>
+    <RootNamespace>dummyclient</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -129,17 +129,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="connection.cpp" />
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="player.cpp" />
-    <ClCompile Include="role.cpp" />
-    <ClCompile Include="room.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="connection.h" />
-    <ClInclude Include="role.h" />
-    <ClInclude Include="player.h" />
-    <ClInclude Include="room.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

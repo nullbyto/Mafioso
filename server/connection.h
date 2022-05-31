@@ -11,4 +11,4 @@ void disconnect(SOCKET sock);
 
 int recieve_data(SOCKET& ConnectSocket, std::vector<char> buf);
 
-void handle_client(SOCKET& ListenSocket, std::vector<Room> rooms);
+void handle_client(SOCKET& ListenSocket);

@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <stdio.h>
+#include <thread>
 
 #include "nlohmann/json.hpp"
 using json = nlohmann::json;
@@ -136,20 +137,8 @@ int recieve_data(SOCKET& ConnectSocket, std::vector<char> &buf) {
 	printf("recv failed: %d\n", WSAGetLastError());
 }
 
-void handle_client(SOCKET &ListenSocket, std::vector<Room> rooms) {
-	SOCKET ClientSocket;
+void handle_client(SOCKET &ClientSocket) {
 	int iResult;
-
-	ClientSocket = INVALID_SOCKET;
-
-	// Accept a client socket
-	ClientSocket = accept(ListenSocket, NULL, NULL);
-	if (ClientSocket == INVALID_SOCKET) {
-		printf("accept failed: %d\n", WSAGetLastError());
-		closesocket(ListenSocket);
-		WSACleanup();
-		return;
-	}
 
 	/////////////////////////////////////////////////////////////////
 	// Recieve name
