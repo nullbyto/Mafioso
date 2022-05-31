@@ -116,15 +116,10 @@ char* getipaddr(SOCKET s, bool port)
 }
 
 int recieve_data(SOCKET& ConnectSocket, std::vector<char> &buf) {
-	//char* recv_buf = new char[DEFAULT_BUFLEN];
-	//int recv_buf_len = DEFAULT_BUFLEN;
 	int iResult;
 
 	iResult = recv(ConnectSocket, &buf[0], buf.size(), 0);
 	if (iResult > 0) {
-		/*std::string msg;
-		msg.append(recv_buf);
-		return msg.substr(0, iResult);*/
 		return iResult;
 	}
 	else if (iResult == 0) {
@@ -138,7 +133,7 @@ int recieve_data(SOCKET& ConnectSocket, std::vector<char> &buf) {
 }
 
 void handle_client(SOCKET &ClientSocket) {
-	int iResult;
+	int iResult = 0;
 
 	/////////////////////////////////////////////////////////////////
 	// Recieve name
@@ -147,12 +142,17 @@ void handle_client(SOCKET &ClientSocket) {
 	std::string client_name;
 
 	auto ip_str = getipaddr(ClientSocket, 0);
-	if (recieve_data(ClientSocket, name_buf) > 0) {
-		client_name.append(name_buf.cbegin(), name_buf.cend());
-		std::cout << "[" << ip_str << "] " << client_name << " joined the server.";
+	while (iResult <= 0) {
+		iResult = recieve_data(ClientSocket, name_buf);
+		if (iResult == 0) {
+			std::cout << "[" << ip_str << "] lost connection" << std::endl;
+		}
 	}
+	client_name.append(name_buf.cbegin(), name_buf.cend());
+	std::cout << "[" << ip_str << "] " << client_name << " joined the server" << std::endl;
 
 	/////////////////////////////////////////////////////////////////
+	// [LATER] Send room info
 
 	return;
 

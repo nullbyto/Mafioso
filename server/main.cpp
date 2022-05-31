@@ -2,6 +2,7 @@
 #include "room.h"
 #include <iostream>
 #include <thread>
+#include <future>
 
 int main() {
 	SOCKET ListenSocket;
@@ -23,17 +24,28 @@ int main() {
 
 	// Accept a client socket
 	/*int clients = 0;*/
+	// THREADING
 	while (1) {
 		ClientSocket = accept(ListenSocket, NULL, NULL);
 		if (ClientSocket == INVALID_SOCKET) {
 			printf("accept failed: %d\n", WSAGetLastError());
 			closesocket(ListenSocket);
 			WSACleanup();
-			//return 0;
+			return 0;
 		}
-		pool.push_back(std::thread(handle_client, std::ref(ListenSocket)));
+		pool.push_back(std::thread(handle_client, std::ref(ClientSocket)));
 	}
-	
+	// ASYNC
+	/*while (1) {
+		ClientSocket = accept(ListenSocket, NULL, NULL);
+		if (ClientSocket == INVALID_SOCKET) {
+			printf("accept failed: %d\n", WSAGetLastError());
+			closesocket(ListenSocket);
+			WSACleanup();
+			return 0;
+		}
+		auto future = std::async(handle_client, std::ref(ClientSocket));
+	}*/
 
 
 	return 0;

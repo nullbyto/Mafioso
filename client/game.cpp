@@ -70,11 +70,12 @@ void handle_player () {
 
     system("cls");
 
-    if (send_data(ConnectSocket, name_buf.data()) != true)
+    if (send_data(ConnectSocket, name_buf.data()) <= 0)
         return;
     
     /////////////////////////////////////////////////////////////////
-
+    // Rooms
+    
     // hbox
         Element document =
         hbox({
@@ -92,9 +93,7 @@ void handle_player () {
 
     /////////////////////////////////////////////////////////////////
     // Recieve rooms
-
-    /*std::vector<Room> rooms;
-    auto rooms_str = recieve_data(ConnectSocket);*/
+    //auto rooms_str = recieve_data(ConnectSocket);
 
 
     /////////////////////////////////////////////////////////////////

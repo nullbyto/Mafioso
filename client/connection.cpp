@@ -2,6 +2,7 @@
 #include <ws2tcpip.h>
 #include <iostream>
 #include <string>
+#include <vector>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -9,7 +10,7 @@
 #define SERVER_IP "127.0.0.1"
 #define DEFAULT_BUFLEN 1024
 
-bool send_data(SOCKET& ConnectSocket, const char* sendbuf) {
+int send_data(SOCKET& ConnectSocket, const char* sendbuf) {
 	int recvbuflen = DEFAULT_BUFLEN;
 
 	//char recv_buf[DEFAULT_BUFLEN];
@@ -22,10 +23,10 @@ bool send_data(SOCKET& ConnectSocket, const char* sendbuf) {
 		printf("send failed: %d\n", WSAGetLastError());
 		closesocket(ConnectSocket);
 		WSACleanup();
-		return false;
+		return iResult;
 	}
 
-	return true;
+	return iResult;
 
 	//printf("Bytes Sent: %ld\n", iResult);
 
@@ -63,39 +64,8 @@ void shutdown_send(SOCKET &ConnectSocket) {
 	}
 }
 
-char* recieve_data(SOCKET &ConnectSocket) {
-	//char recv_buf[DEFAULT_BUFLEN];
-	char* recv_buf = new char[DEFAULT_BUFLEN];
-	int recv_buf_len = DEFAULT_BUFLEN;
-	int iResult;
-
-	//iResult = recv(ConnectSocket, recv_buf, recv_buf_len, 0);
-	iResult = recv(ConnectSocket, recv_buf, recv_buf_len, 0);
-	if (iResult > 0) {
-		/*std::string msg;
-		msg.append(recv_buf);
-		return msg.substr(0, iResult);*/
-		return recv_buf;
-	}
-	else if (iResult == 0) {
-		printf("Connection closed\n");
-		return NULL;
-	}
-	else
-		return NULL;
-
-	printf("recv failed: %d\n", WSAGetLastError());
-
-	//// Receive data until the server closes the connection
-	//do {
-	//	iResult = recv(ConnectSocket, recv_buf, recv_buf_len, 0);
-	//	if (iResult > 0)
-	//		printf("Bytes received: %d\n", iResult);
-	//	else if (iResult == 0)
-	//		printf("Connection closed\n");
-	//	else
-	//		printf("recv failed: %d\n", WSAGetLastError());
-	//} while (iResult > 0);
+int recieve_data(SOCKET& ConnectSocket, std::vector<char>& buf) {
+	return recv(ConnectSocket, &buf[0], buf.size(), 0);
 }
 
 SOCKET connect() {
