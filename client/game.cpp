@@ -35,6 +35,12 @@
 #include "ftxui/dom/elements.hpp"  // for text, hbox, separator, Element, operator|, vbox, border
 #include "ftxui/util/ref.hpp"  // for Ref
 
+// JSON
+#include "nlohmann/json.hpp"
+
+// general
+#include <cstdlib>      // for exit function
+
 // Game
 #include "connection.h"
 #include "../server/room.h"
@@ -54,8 +60,9 @@ Component Wrap(std::string name, Component component) {
     });
 }
 
+
 void handle_player () {
-	SOCKET ConnectSocket;
+	SOCKET ConnectSocket = NULL;
     do {
         ConnectSocket = connect();
     } while (ConnectSocket == NULL);
@@ -112,115 +119,165 @@ void handle_player () {
     // Room setup
 
     // -- Settings --------------------------------------------------
-     int day_length = 2;
-     int night_length = 1;
-     bool last_will_selected = false;
-     bool no_reveal_selected = false;
-     bool day_start_selected = false;
-     auto screen_setup = ScreenInteractive::TerminalOutput();
+    int day_length = 2;
+    int night_length = 1;
+    bool last_will_selected = false;
+    bool no_reveal_selected = false;
+    bool day_start_selected = false;
+    auto setup_screen = ScreenInteractive::TerminalOutput();
 
-     auto slider_day = Slider("", &day_length, 1, 10, 1);
-     auto slider_night = Slider("", &night_length, 1, 10, 1);
+    auto slider_day = Slider("", &day_length, 1, 10, 1);
+    auto slider_night = Slider("", &night_length, 1, 10, 1);
 
-     auto checkboxes = Container::Vertical({
-            Checkbox("Last will", &last_will_selected),
-            Checkbox("No reveal", &no_reveal_selected),
-            Checkbox("Day start", &day_start_selected),
-         });
+    auto checkboxes = Container::Vertical({
+        Checkbox("Last will", &last_will_selected),
+        Checkbox("No reveal", &no_reveal_selected),
+        Checkbox("Day start", &day_start_selected),
+        });
 
-     // -- Roles ---------------------------------------------------
-     std::vector<std::string> tab_values{
+    // -- Roles ---------------------------------------------------
+    std::vector<std::string> tab_values{
         "Village",
         "Mafia",
         "Independent",
-     };
-     int role_tab_selected = 0;
-     auto role_tab_toggle = Toggle(&tab_values, &role_tab_selected);
+    };
+    int role_tab_selected = 0;
+    auto role_tab_toggle = Toggle(&tab_values, &role_tab_selected);
 
-     // -- Village
-     bool villager_selected = false;
-     bool doctor_selected = false;
-     bool cop_selected = false;
-     bool escort_selected = false;
-     bool armsdealer_selected = false;
-     // -- Mafia
-     bool godfather_selected = false;
-     bool mafioso_selected = false;
-     // -- Independent
-     bool jester_selected = false;
+    // -- Village
+    bool villager_selected = false;
+    bool doctor_selected = false;
+    bool cop_selected = false;
+    bool escort_selected = false;
+    bool armsdealer_selected = false;
+    // -- Mafia
+    bool godfather_selected = false;
+    bool mafioso_selected = false;
+    // -- Independent
+    bool jester_selected = false;
 
-     auto village_tab_component = Container::Vertical(
-         {
-            Checkbox("Villager", &villager_selected),
-            Checkbox("Doctor", &doctor_selected),
-            Checkbox("Cop", &cop_selected),
-            Checkbox("Escort", &escort_selected),
-            Checkbox("Arms dealer", &armsdealer_selected),
-         }
-     );
+    auto village_tab_component = Container::Vertical(
+        {
+        Checkbox("Villager", &villager_selected),
+        Checkbox("Doctor", &doctor_selected),
+        Checkbox("Cop", &cop_selected),
+        Checkbox("Escort", &escort_selected),
+        Checkbox("Arms dealer", &armsdealer_selected),
+        }
+    );
 
-     auto mafia_tab_component = Container::Vertical(
-         {
-            Checkbox("Godfather", &godfather_selected),
-            Checkbox("Mafioso", &mafioso_selected),
-         }
-     );
+    auto mafia_tab_component = Container::Vertical(
+        {
+        Checkbox("Godfather", &godfather_selected),
+        Checkbox("Mafioso", &mafioso_selected),
+        }
+    );
 
-     auto independent_tab_component = Container::Vertical(
-         {
-            Checkbox("Jester", &jester_selected),
-         }
-     );
+    auto independent_tab_component = Container::Vertical(
+        {
+        Checkbox("Jester", &jester_selected),
+        }
+    );
 
-     auto role_tab_container = Container::Tab(
-         {
-            village_tab_component,
-            mafia_tab_component,
-            independent_tab_component,
-         }, 
-         &role_tab_selected);
+    auto role_tab_container = Container::Tab(
+        {
+        village_tab_component,
+        mafia_tab_component,
+        independent_tab_component,
+        }, 
+        &role_tab_selected);
 
-     auto setup_buttons = Container::Horizontal(
-         {
-            Button("Create room", [&] { return; }),
-            Button("Disconnect", [&] {disconnect(ConnectSocket); exit(0); }),
-         }
-     );
+    auto setup_buttons = Container::Horizontal(
+        {
+        Button("Create room", setup_screen.ExitLoopClosure()),
+        Button("Disconnect", [&] {disconnect(ConnectSocket); exit(0); }),
+        }
+    );
 
+    auto setup_layout = Container::Vertical({
+        slider_day,
+        slider_night,
+        checkboxes,
+        role_tab_toggle,
+        role_tab_container,
+        setup_buttons,
+    });
 
-     auto layout_setup = Container::Vertical({
-         slider_day,
-         slider_night,
-         checkboxes,
-         role_tab_toggle,
-         role_tab_container,
-         setup_buttons,
-     });
+    auto setup_component = Renderer(setup_layout, [&] {
+        return vbox({
+            hbox({
+                text("Room setup! You are the leader.") | ftxui::border | flex,
+            }),
+            separator(),
+            hbox(text("Day length (in mins) "), text(std::to_string(day_length))),
+            slider_day->Render(),
+            hbox(text("Night length (in mins) "), text(std::to_string(night_length))),
+            slider_night->Render(),
+            separator(),
+            checkboxes->Render(),
+            separator(),
 
-     auto component_setup = Renderer(layout_setup, [&] {
-         return vbox({
-                hbox({
-                    text("Room setup! You are the leader.") | ftxui::border | flex,
-                }),
-                separator(),
-                hbox(text("Day length (in mins) "), text(std::to_string(day_length))),
-                slider_day->Render(),
-                hbox(text("Night length (in mins) "), text(std::to_string(night_length))),
-                slider_night->Render(),
-                separator(),
-                checkboxes->Render(),
-                separator(),
+            role_tab_toggle->Render(),
+            separator(),
+            role_tab_container->Render(),
 
-                role_tab_toggle->Render(),
-                separator(),
-                role_tab_container->Render(),
+            separator(),
+            setup_buttons->Render(),
+        }) | border;
+    });
+    setup_screen.Loop(setup_component);
 
-                separator(),
-                setup_buttons->Render(),
-         }) | border;
-     });
-     screen_setup.Loop(component_setup);
+    /////////////////////////////////////////////////////////////////
+    // Json
 
+    Settings s {
+    day_length,
+    night_length,
+    last_will_selected,
+    no_reveal_selected,
+    day_start_selected,
+    };
+
+    Roles r {
+        // -- Village
+    villager_selected,
+    doctor_selected,
+    cop_selected,
+    escort_selected,
+    armsdealer_selected,
+    // -- Mafia
+    godfather_selected,
+    mafioso_selected,
+    // -- Independent
+    jester_selected,
+    };
+
+    nlohmann::json roles_json;
+    roles_json["villager"] = r.villager;
+    roles_json["doctor"] = r.doctor;
+    roles_json["cop"] = r.cop;
+    roles_json["escort"] = r.escort;
+    roles_json["armsdealer"] = r.armsdealer;
+    roles_json["godfather"] = r.godfather;
+    roles_json["mafioso"] = r.mafioso;
+    roles_json["jester"] = r.jester;
+
+    nlohmann::json settings_json;
+    settings_json["day_length"] = s.day_length;
+    settings_json["night_length"] = s.night_length;
+    settings_json["last_will"] = s.last_will;
+    settings_json["no_reveal"] = s.no_reveal;
+    settings_json["day_start"] = s.day_start;
+    
+    /////////////////////////////////////////////////////////////////
+    // Send JSON
+    auto roles_json_str = roles_json.dump();
+    auto settings_json_str = settings_json.dump();
+    if (send_data(ConnectSocket, roles_json_str.data()) <= 0)
+        return;
+
+    if (send_data(ConnectSocket, settings_json_str.data()) <= 0)
+        return;
 
     /////////////////////////////////////////////////////////////////
 

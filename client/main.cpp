@@ -1,8 +1,8 @@
 // General
-#include <functional>  // for function
-#include <iostream>  // for basic_ostream::operator<<, operator<<, endl, basic_ostream, basic_ostream<>::__ostream_type, cout, ostream
-#include <string>    // for string, basic_string, allocator
-#include <vector>    // for vector
+#include <functional>   // for function
+#include <iostream>     // for basic_ostream::operator<<, operator<<, endl, basic_ostream, basic_ostream<>::__ostream_type, cout, ostream
+#include <string>       // for string, basic_string, allocator
+#include <vector>       // for vector
 
 // FTXUI
 #include "ftxui/component/captured_mouse.hpp"      // for ftxui
@@ -22,16 +22,13 @@ int main(int argc, const char* argv[]) {
         "Connect to the game server",
         "Quit",
     };
-    int selected = 0;
 
+    int selected = 0;
     MenuOption option;
     option.on_enter = screen.ExitLoopClosure();
     auto menu = Menu(&entries, &selected, &option);
 
     screen.Loop(menu);
-
-    //std::cout << "Selected element = " << selected << std::endl;
-
 
     switch (selected) {
     case 0:

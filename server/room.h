@@ -10,8 +10,20 @@ struct Settings {
 	bool last_will;
 	bool no_reveal;
 	bool day_start;
+};
 
-	std::vector<Role> roles;
+struct Roles {
+    // -- Village
+    bool villager;
+    bool doctor;
+    bool cop;
+    bool escort;
+    bool armsdealer;
+    // -- Mafia
+    bool godfather;
+    bool mafioso;
+    // -- Independent
+    bool jester;
 };
 
 class Room

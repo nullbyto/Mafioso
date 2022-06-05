@@ -13,8 +13,6 @@
 int send_data(SOCKET& ConnectSocket, const char* sendbuf) {
 	int recvbuflen = DEFAULT_BUFLEN;
 
-	//char recv_buf[DEFAULT_BUFLEN];
-
 	int iResult;
 
 	// Send an initial buffer
@@ -27,29 +25,6 @@ int send_data(SOCKET& ConnectSocket, const char* sendbuf) {
 	}
 
 	return iResult;
-
-	//printf("Bytes Sent: %ld\n", iResult);
-
-	//// shutdown the connection for sending since no more data will be sent
-	//// the client can still use the ConnectSocket for receiving data
-	//iResult = shutdown(ConnectSocket, SD_SEND);
-	//if (iResult == SOCKET_ERROR) {
-	//	printf("shutdown failed: %d\n", WSAGetLastError());
-	//	closesocket(ConnectSocket);
-	//	WSACleanup();
-	//	return;
-	//}
-
-	//// Receive data until the server closes the connection
-	//do {
-	//	iResult = recv(ConnectSocket, recv_buf, recvbuflen, 0);
-	//	if (iResult > 0)
-	//		printf("Bytes received: %d\n", iResult);
-	//	else if (iResult == 0)
-	//		printf("Connection closed\n");
-	//	else
-	//		printf("recv failed: %d\n", WSAGetLastError());
-	//} while (iResult > 0);
 }
 
 void shutdown_send(SOCKET &ConnectSocket) {
@@ -64,7 +39,7 @@ void shutdown_send(SOCKET &ConnectSocket) {
 	}
 }
 
-int recieve_data(SOCKET& ConnectSocket, std::vector<char>& buf) {
+int recieve_data(SOCKET& ConnectSocket, std::vector<char> &buf) {
 	return recv(ConnectSocket, &buf[0], buf.size(), 0);
 }
 
@@ -136,7 +111,7 @@ SOCKET connect() {
 }
 
 
-void disconnect(SOCKET ConnectSocket) {
+void disconnect(SOCKET &ConnectSocket) {
 	// shutdown the send half of the connection since no more data will be sent
 	int iResult = shutdown(ConnectSocket, SD_SEND);
 	if (iResult == SOCKET_ERROR) {
@@ -149,33 +124,3 @@ void disconnect(SOCKET ConnectSocket) {
 	closesocket(ConnectSocket);
 	WSACleanup();
 }
-
-
-//void connect() {
-//	struct sockaddr_in server_addr;
-//	char buffer[1024] = {0};
-//
-//	int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-//	// Create TCP socket
-//	if (sockfd < 0) {
-//		std::cout << std::endl << "Socket creation error!" << std::endl;
-//		return;
-//	}
-//
-//	server_addr.sin_family	= AF_INET;
-//	server_addr.sin_port = htons(PORT);
-//
-//	// Check if address is valid
-//	if (inet_pton(AF_INET, SERVER_IP, &server_addr.sin_addr) <= 0) {
-//		std::cout << std::endl << "Invalid address" << std::endl;
-//		return;
-//	}
-//
-//	SOCKET ConnectSocket = INVALID_SOCKET;
-//
-//	// Connect to server
-//	auto connection = connect(sockfd, )
-//	if () {
-//
-//	}
-//}
