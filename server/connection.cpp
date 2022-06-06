@@ -5,17 +5,24 @@
 #include <string>
 #include <stdio.h>
 #include <thread>
+#include <mutex>
 
 #include "nlohmann/json.hpp"
 using json = nlohmann::json;
 
 #include "room.h"
+#include "main.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 
 #define PORT "5555"
 #define SERVER_IP "127.0.0.1"
 #define DEFAULT_BUFLEN 1024
+
+static int done = 0;
+static bool first = true;
+static std::mutex first_mutex;
+static SOCKET leader = NULL;
 
 void disconnect(SOCKET &socket, std::list<SOCKET> &clients) {
 	// shutdown the send half of the connection since no more data will be sent
@@ -202,27 +209,35 @@ int recieve_data(SOCKET &ConnectSocket, std::vector<char> &buf) {
 	return recv(ConnectSocket, &buf[0], buf.size(), 0);
 }
 
-void broadcast_data(std::list<SOCKET> clients, const char* sendbuf) {
+int send_data(SOCKET& ConnectSocket, const char* sendbuf) {
 	int recvbuflen = DEFAULT_BUFLEN;
+	int iResult;
 
+	iResult = send(ConnectSocket, sendbuf, (int)strlen(sendbuf), 0);
+	return iResult;
+}
+
+void broadcast_data(std::list<SOCKET> &clients, const char* sendbuf, SOCKET &exception) {
+	int recvbuflen = DEFAULT_BUFLEN;
 	int iResult;
 
 	for (auto client : clients) {
-		iResult = send(client, sendbuf, (int)strlen(sendbuf), 0);
+		if (client == exception)
+			continue;
+		iResult = send(client, sendbuf, strlen(sendbuf), 0);
 		if (iResult == SOCKET_ERROR) {
 			printf("send failed: %d\n", WSAGetLastError());
 			closesocket(client);
 			WSACleanup();
+			std::lock_guard<std::mutex> lock(clients_mutex);
 			clients.remove(client);
 			return;
 		}
 	}
-	
-
 	return;
 }
 
-void recieve_setup(SOCKET& ClientSocket, std::list<SOCKET> &clients) {
+int recieve_setup(SOCKET& ClientSocket, std::list<SOCKET> &clients) {
 	std::vector<char> roles_buf(1024);
 	std::string roles_json_str;
 	auto ip_str = getipaddr(ClientSocket, 0);
@@ -231,8 +246,9 @@ void recieve_setup(SOCKET& ClientSocket, std::list<SOCKET> &clients) {
 		iResult = recieve_data(ClientSocket, roles_buf);
 		if (iResult == 0 || iResult == -1) {
 			std::cout << "[" << ip_str << "] disconnected" << std::endl;
+			std::lock_guard<std::mutex> lock(clients_mutex);
 			clients.remove(ClientSocket);
-			return;
+			return iResult;
 		}
 	}
 	roles_json_str.append(roles_buf.cbegin(), roles_buf.cend());
@@ -244,8 +260,9 @@ void recieve_setup(SOCKET& ClientSocket, std::list<SOCKET> &clients) {
 		iResult = recieve_data(ClientSocket, settings_buf);
 		if (iResult == 0 || iResult == -1) {
 			std::cout << "[" << ip_str << "] disconnected" << std::endl;
+			std::lock_guard<std::mutex> lock(clients_mutex);
 			clients.remove(ClientSocket);
-			return;
+			return iResult;
 		}
 	}
 	settings_json_str.append(settings_buf.cbegin(), settings_buf.cend());
@@ -273,9 +290,15 @@ void recieve_setup(SOCKET& ClientSocket, std::list<SOCKET> &clients) {
 	};
 
 	std::cout << settings_json_str << std::endl << roles_json_str << std::endl;
+
+	broadcast_data(clients, roles_json_str.data(), ClientSocket);
+	broadcast_data(clients, settings_json_str.data(), ClientSocket);
+
+	return iResult;
 }
 
 void handle_client(SOCKET &ClientSocket, std::list<SOCKET> &clients) {
+	int clients_count = clients.size();
 	int iResult = 0;
 
 	/////////////////////////////////////////////////////////////////
@@ -289,6 +312,7 @@ void handle_client(SOCKET &ClientSocket, std::list<SOCKET> &clients) {
 		iResult = recieve_data(ClientSocket, name_buf);
 		if (iResult == 0 || iResult == -1) {
 			std::cout << "[" << ip_str << "] disconnected" << std::endl;
+			std::lock_guard<std::mutex> lock(clients_mutex);
 			clients.remove(ClientSocket);
 			return;
 		}
@@ -297,22 +321,51 @@ void handle_client(SOCKET &ClientSocket, std::list<SOCKET> &clients) {
 	std::cout << "[" << ip_str << "] " << client_name << " joined the server" << std::endl;
 
 	/////////////////////////////////////////////////////////////////
-	// [LATER] Send room info
+	// Send room info
+
+	iResult = 0;
+	while (iResult <= 0) {
+		iResult = send(ClientSocket, (char*)&clients_count, sizeof(clients_count), 0);
+		if (iResult == 0) {
+			std::cout << "[" << ip_str << "] disconnected" << std::endl;
+			std::lock_guard<std::mutex> lock(clients_mutex);
+			clients.remove(ClientSocket);
+			return;
+		}
+	}
 
 	/////////////////////////////////////////////////////////////////
 	// Recieve room setup info
+	// and broadcast room setup if room already set
 
-	if (clients.size() == 1) {
-		recieve_setup(ClientSocket, clients);
+	if (clients_count == 1) {
+		leader = ClientSocket;
+		if (recieve_setup(ClientSocket, clients) > 0) {
+			done = 1;
+			broadcast_data(clients, (char*)&done, ClientSocket);
+			return;
+		}
 	}
-	else {
+	/*else {
+		while (done == 0) {
+
+		}
+		broadcast_data(clients, (char*)&done, leader);
+	}*/
+
+	while (1) {
 
 	}
 
 	return;
 
-	///////////////////////////////////////////////////////////////////
 
+
+
+
+
+
+	///////////////////////////////////////////////////////////////////
 
 	char recv_buf[DEFAULT_BUFLEN];
 	int recv_buf_len = DEFAULT_BUFLEN;
@@ -340,23 +393,23 @@ void handle_client(SOCKET &ClientSocket, std::list<SOCKET> &clients) {
 }
 
 
-void keepalive(std::list<SOCKET> &clients) {
-	while (1) {
-		for (auto client: clients) {
-			int flags = 1;
-			if (setsockopt(client, SOL_SOCKET, SO_KEEPALIVE, (char *)&flags, sizeof(flags))) { perror("ERROR: setsocketopt(), SO_KEEPALIVE"); exit(0); };
-			std::vector<char> name_buf(512);
-			std::string client_name;
-			int iResult = 0;
-
-			auto ip_str = getipaddr(client, 0);
-			while (iResult <= 0) {
-				iResult = recieve_data(client, name_buf);
-				if (iResult == 0) {
-					std::cout << "[" << ip_str << "] disconnected" << std::endl;
-					clients.pop_back();
-				} 
-			}
-		}
-	}
-}
+//void keepalive(std::list<SOCKET> &clients) {
+//	while (1) {
+//		for (auto client: clients) {
+//			int flags = 1;
+//			if (setsockopt(client, SOL_SOCKET, SO_KEEPALIVE, (char *)&flags, sizeof(flags))) { perror("ERROR: setsocketopt(), SO_KEEPALIVE"); exit(0); };
+//			std::vector<char> name_buf(512);
+//			std::string client_name;
+//			int iResult = 0;
+//
+//			auto ip_str = getipaddr(client, 0);
+//			while (iResult <= 0) {
+//				iResult = recieve_data(client, name_buf);
+//				if (iResult == 0) {
+//					std::cout << "[" << ip_str << "] disconnected" << std::endl;
+//					clients.pop_back();
+//				} 
+//			}
+//		}
+//	}
+//}

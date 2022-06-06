@@ -8,12 +8,10 @@
 
 SOCKET startup();
 
+SOCKET startup_keepalive();
+
 void disconnect(SOCKET sock);
 
 int recieve_data(SOCKET &ConnectSocket, std::vector<char> &buf);
 
 void handle_client(SOCKET &ListenSocket, std::list<SOCKET> &clients);
-
-void keepalive(std::list<SOCKET> &clients);
-
-SOCKET startup_keepalive();

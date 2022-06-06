@@ -37,15 +37,15 @@
 
 // JSON
 #include "nlohmann/json.hpp"
+using json = nlohmann::json;
 
 // general
 #include <cstdlib>      // for exit function
+#include <future>       // for async
 
 // Game
 #include "connection.h"
 #include "../server/room.h"
-
-bool joined = 0;
 
 using namespace ftxui;
 
@@ -60,61 +60,7 @@ Component Wrap(std::string name, Component component) {
     });
 }
 
-
-void handle_player () {
-	SOCKET ConnectSocket = NULL;
-    do {
-        ConnectSocket = connect();
-    } while (ConnectSocket == NULL);
-
-    joined = true;
-    
-	system("cls");
-
-    /////////////////////////////////////////////////////////////////
-    // Input and send name
-
-    std::string name_buf;
-    auto screen_name = ScreenInteractive::TerminalOutput();
-    InputOption option_input;
-    option_input.on_enter = screen_name.ExitLoopClosure();
-    Component input_name = Input(&name_buf, "your name here", option_input);
-
-    auto component_input = Container::Vertical({
-        input_name,
-    });
-
-    auto renderer = Renderer(component_input, [&] {
-        return vbox({
-                   hbox(text("Player name: "), input_name->Render()),
-            }) |
-            border;
-    });
-    screen_name.Loop(renderer);
-
-    system("cls");
-
-    if (send_data(ConnectSocket, name_buf.data()) <= 0)
-        return;
-    
-    /////////////////////////////////////////////////////////////////
-    // Room
-    
-    // hbox
-    //    Element document =
-    //    hbox({
-    //        text("Room setup! You are the leader.") | ftxui::border | flex,
-    //        });
-
-    //auto screen_top = Screen::Create(
-    //    Dimension::Full(),       // Width
-    //    Dimension::Fit(document) // Height
-    //);
-    //ftxui::Render(screen_top, document);
-    //screen_top.Print();
-    // 
-    //std::cout << std::endl;
-
+void room_setup(SOCKET &ConnectSocket) {
     /////////////////////////////////////////////////////////////////
     // Room setup
 
@@ -184,7 +130,7 @@ void handle_player () {
         village_tab_component,
         mafia_tab_component,
         independent_tab_component,
-        }, 
+        },
         &role_tab_selected);
 
     auto setup_buttons = Container::Horizontal(
@@ -201,7 +147,7 @@ void handle_player () {
         role_tab_toggle,
         role_tab_container,
         setup_buttons,
-    });
+        });
 
     auto setup_component = Renderer(setup_layout, [&] {
         return vbox({
@@ -223,14 +169,14 @@ void handle_player () {
 
             separator(),
             setup_buttons->Render(),
-        }) | border;
-    });
+            }) | border;
+        });
     setup_screen.Loop(setup_component);
 
     /////////////////////////////////////////////////////////////////
     // Json
 
-    Settings s {
+    Settings s{
     day_length,
     night_length,
     last_will_selected,
@@ -238,7 +184,7 @@ void handle_player () {
     day_start_selected,
     };
 
-    Roles r {
+    Roles r{
         // -- Village
     villager_selected,
     doctor_selected,
@@ -268,9 +214,10 @@ void handle_player () {
     settings_json["last_will"] = s.last_will;
     settings_json["no_reveal"] = s.no_reveal;
     settings_json["day_start"] = s.day_start;
-    
+
     /////////////////////////////////////////////////////////////////
     // Send JSON
+
     auto roles_json_str = roles_json.dump();
     auto settings_json_str = settings_json.dump();
     if (send_data(ConnectSocket, roles_json_str.data()) <= 0)
@@ -278,6 +225,179 @@ void handle_player () {
 
     if (send_data(ConnectSocket, settings_json_str.data()) <= 0)
         return;
+}
+
+void recieve_setup(SOCKET &ConnectSocket, Roles &r, Settings &s, int &done) {
+    std::vector<char> roles_buf(1024);
+    std::string roles_json_str;
+    int iResult = 0;
+    while (iResult <= 0) {
+        iResult = recieve_data(ConnectSocket, roles_buf);
+        if (iResult == 0 || iResult == -1) {
+            std::cout << "Lost connection to server!" << std::endl;
+            return;
+        }
+    }
+    roles_json_str.append(roles_buf.cbegin(), roles_buf.cend());
+
+    std::vector<char> settings_buf(1024);
+    std::string settings_json_str;
+    iResult = 0;
+    while (iResult <= 0) {
+        iResult = recieve_data(ConnectSocket, settings_buf);
+        if (iResult == 0 || iResult == -1) {
+            std::cout << "Lost connection to server!" << std::endl;
+            return;
+        }
+    }
+    settings_json_str.append(settings_buf.cbegin(), settings_buf.cend());
+
+    json roles_json = json::parse(roles_json_str);
+    json settings_json = json::parse(settings_json_str);
+
+    r = {
+        roles_json["villager"],
+        roles_json["doctor"],
+        roles_json["cop"],
+        roles_json["escort"],
+        roles_json["armsdealer"],
+        roles_json["godfather"],
+        roles_json["mafioso"],
+        roles_json["jester"],
+    };
+
+    s = {
+        settings_json["day_length"],
+        settings_json["night_length"],
+        settings_json["last_will"],
+        settings_json["no_reveal"],
+        settings_json["day_start"],
+    };
+
+    std::cout << roles_json_str << std::endl;
+    std::cout << settings_json_str << std::endl;
+
+    done = 1;
+}
+
+int wait_for_setup(int &done) {
+    using namespace ftxui;
+    using namespace std::chrono_literals;
+
+    std::string reset_position;
+    for (int index = 0; index < 1000; ++index) {
+        // Check if setup recieved
+        if (done > 0) {
+            return done;
+        }
+
+        std::vector<Element> entries;
+        entries.push_back(
+            hbox({
+                spinner(20, index) | bold,
+                })
+        );
+        
+        auto document = hbox({
+            hbox({
+                text("Waiting for leader to setup room!") | ftxui::border | flex,
+            }),
+            vbox(std::move(entries)) | flex,
+            }) | flex;
+        auto screen = Screen::Create(Dimension::Full(), Dimension::Fit(document));
+        Render(screen, document);
+        std::cout << reset_position;
+        screen.Print();
+        reset_position = screen.ResetPosition();
+
+        std::this_thread::sleep_for(0.1s);
+    }
+    std::cout << std::endl;
+    return 0;
+}
+
+void handle_player () {
+	SOCKET ConnectSocket = NULL;
+    do {
+        ConnectSocket = connect();
+    } while (ConnectSocket == NULL);
+    
+	system("cls");
+
+    /////////////////////////////////////////////////////////////////
+    // Input and send name
+
+    std::string name_buf;
+    auto screen_name = ScreenInteractive::TerminalOutput();
+    InputOption option_input;
+    option_input.on_enter = screen_name.ExitLoopClosure();
+    Component input_name = Input(&name_buf, "your name here", option_input);
+
+    auto component_input = Container::Vertical({
+        input_name,
+    });
+
+    auto renderer = Renderer(component_input, [&] {
+        return vbox({
+                   hbox(text("Player name: "), input_name->Render()),
+            }) |
+            border;
+    });
+    screen_name.Loop(renderer);
+
+    system("cls");
+
+    if (send_data(ConnectSocket, name_buf.data()) <= 0)
+        return;
+
+    /////////////////////////////////////////////////////////////////
+    // Recieve info about room
+
+    int clients_buf;
+    int iResult = 0;
+    while (iResult <= 0) {
+        iResult = recv(ConnectSocket, (char *)&clients_buf, sizeof(clients_buf), 0);
+        if (iResult == 0 || iResult == -1) {
+            std::cout << "Lost connection to server!" << std::endl;
+            return;
+        }
+    }
+    int clients_count = clients_buf;
+
+    std::cout << "Clients count = " << clients_count << std::endl;
+
+    /////////////////////////////////////////////////////////////////
+
+    if (clients_count == 1) {
+        room_setup(ConnectSocket);
+    }
+    else {
+        int done = 0;
+        Roles r;
+        Settings s;
+        auto future = std::async(std::launch::async, recieve_setup, std::ref(ConnectSocket), std::ref(r), std::ref(s), std::ref(done));
+        wait_for_setup(done);
+        std::cout << "Done" << std::endl;
+    }
+    
+    /////////////////////////////////////////////////////////////////
+    // Room
+    
+    // hbox
+    //    Element document =
+    //    hbox({
+    //        text("Room setup! You are the leader.") | ftxui::border | flex,
+    //        });
+
+    //auto screen_top = Screen::Create(
+    //    Dimension::Full(),       // Width
+    //    Dimension::Fit(document) // Height
+    //);
+    //ftxui::Render(screen_top, document);
+    //screen_top.Print();
+    // 
+    //std::cout << std::endl;
+
 
     /////////////////////////////////////////////////////////////////
 

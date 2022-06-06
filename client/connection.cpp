@@ -105,11 +105,7 @@ SOCKET connect() {
 	}
 
 	return ConnectSocket;
-
-	const char* sendbuf = "this is a test";
-	send_data(ConnectSocket, sendbuf);
 }
-
 
 void disconnect(SOCKET &ConnectSocket) {
 	// shutdown the send half of the connection since no more data will be sent

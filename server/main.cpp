@@ -9,14 +9,14 @@
 
 int main() {
 	SOCKET ListenSocket;
-	ListenSocket = startup_keepalive();
+	ListenSocket = startup();
 	if (ListenSocket != NULL) {
 		std::cout << "Server started successfully!" << std::endl;
 	}
 
 	//////////////////////////////////////////
 
-	std::vector<std::thread> pool;
+	//std::vector<std::thread> pool;
 	std::list<SOCKET> clients;
 	std::list<std::future<void>> clients_futures;
 
@@ -35,7 +35,9 @@ int main() {
 			break;
 		}
 		pool.push_back(std::thread(handle_client, std::ref(ClientSocket), std::ref(clients)));
+		clients_mutex.lock();
 		clients.push_back(ClientSocket);
+		clients_mutex.unlock();
 		std::cout << clients.size() << "\n";
 	}*/
 
@@ -51,7 +53,9 @@ int main() {
 			return 0;
 		}
 		clients_futures.push_back(std::async(std::launch::async, handle_client, std::ref(ClientSocket), std::ref(clients)));
+		clients_mutex.lock();
 		clients.push_back(ClientSocket);
+		clients_mutex.unlock();
 		std::cout << clients.size() << "\n";
 	}
 
