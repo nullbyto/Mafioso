@@ -53,9 +53,10 @@ int main() {
 			return 0;
 		}
 		clients_futures.push_back(std::async(std::launch::async, handle_client, std::ref(ClientSocket), std::ref(clients)));
-		clients_mutex.lock();
+		
+		/*clients_mutex.lock();
 		clients.push_back(ClientSocket);
-		clients_mutex.unlock();
+		clients_mutex.unlock();*/
 		std::cout << clients.size() << "\n";
 	}
 

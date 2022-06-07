@@ -242,7 +242,7 @@ int recieve_setup(SOCKET& ClientSocket, std::list<SOCKET> &clients) {
 	std::string roles_json_str;
 	auto ip_str = getipaddr(ClientSocket, 0);
 	int iResult = 0;
-	while (iResult <= 0) {
+	if (iResult <= 0) {
 		iResult = recieve_data(ClientSocket, roles_buf);
 		if (iResult == 0 || iResult == -1) {
 			std::cout << "[" << ip_str << "] disconnected" << std::endl;
@@ -256,7 +256,7 @@ int recieve_setup(SOCKET& ClientSocket, std::list<SOCKET> &clients) {
 	std::vector<char> settings_buf(1024);
 	std::string settings_json_str;
 	iResult = 0;
-	while (iResult <= 0) {
+	if (iResult <= 0) {
 		iResult = recieve_data(ClientSocket, settings_buf);
 		if (iResult == 0 || iResult == -1) {
 			std::cout << "[" << ip_str << "] disconnected" << std::endl;
@@ -297,8 +297,7 @@ int recieve_setup(SOCKET& ClientSocket, std::list<SOCKET> &clients) {
 	return iResult;
 }
 
-void handle_client(SOCKET &ClientSocket, std::list<SOCKET> &clients) {
-	int clients_count = clients.size();
+void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 	int iResult = 0;
 
 	/////////////////////////////////////////////////////////////////
@@ -308,12 +307,12 @@ void handle_client(SOCKET &ClientSocket, std::list<SOCKET> &clients) {
 	std::string client_name;
 
 	auto ip_str = getipaddr(ClientSocket, 0);
-	while (iResult <= 0) {
+	if (iResult <= 0) {
 		iResult = recieve_data(ClientSocket, name_buf);
 		if (iResult == 0 || iResult == -1) {
-			std::cout << "[" << ip_str << "] disconnected" << std::endl;
-			std::lock_guard<std::mutex> lock(clients_mutex);
-			clients.remove(ClientSocket);
+			//std::cout << "[" << ip_str << "] disconnected" << std::endl;
+			//std::lock_guard<std::mutex> lock(clients_mutex);
+			//clients.remove(ClientSocket);
 			return;
 		}
 	}
@@ -323,8 +322,13 @@ void handle_client(SOCKET &ClientSocket, std::list<SOCKET> &clients) {
 	/////////////////////////////////////////////////////////////////
 	// Send room info
 
+	clients_mutex.lock();
+	clients.push_back(ClientSocket);
+	int clients_count = clients.size();
+	clients_mutex.unlock();
+
 	iResult = 0;
-	while (iResult <= 0) {
+	if (iResult <= 0) {
 		iResult = send(ClientSocket, (char*)&clients_count, sizeof(clients_count), 0);
 		if (iResult == 0) {
 			std::cout << "[" << ip_str << "] disconnected" << std::endl;

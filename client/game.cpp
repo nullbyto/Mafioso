@@ -355,7 +355,7 @@ void handle_player () {
 
     int clients_buf;
     int iResult = 0;
-    while (iResult <= 0) {
+    if (iResult <= 0) {
         iResult = recv(ConnectSocket, (char *)&clients_buf, sizeof(clients_buf), 0);
         if (iResult == 0 || iResult == -1) {
             std::cout << "Lost connection to server!" << std::endl;
