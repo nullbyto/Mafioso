@@ -14,29 +14,27 @@ struct Settings {
 
 struct Roles {
     // -- Village
-    bool villager;
-    bool doctor;
-    bool cop;
-    bool escort;
-    bool armsdealer;
+    int villager;
+    int doctor;
+    int cop;
+    int escort;
+    int armsdealer;
     // -- Mafia
-    bool godfather;
-    bool mafioso;
+    int godfather;
+    int mafioso;
     // -- Independent
-    bool jester;
+    int jester;
 };
 
 class Room
 {
 public:
-	int count;
-	std::string name;
-	Player leader;
-	std::vector<Player> players;
+    Roles roles;
 	Settings settings;
 
-	Room(int count, std::string name, Player leader, std::vector<Player> players, Settings settings);
-	~Room();
+    Room() = default;
+	Room(Roles roles, Settings settings);
+	~Room() = default;
 
 private:
 

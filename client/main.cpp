@@ -15,6 +15,7 @@
 #include "game.h"
 
 int main(int argc, const char* argv[]) {
+START:
     using namespace ftxui;
     auto screen = ScreenInteractive::TerminalOutput();
 
@@ -33,6 +34,7 @@ int main(int argc, const char* argv[]) {
     switch (selected) {
     case 0:
         handle_player();
+        goto START;
         break;
     case 1:
         break;

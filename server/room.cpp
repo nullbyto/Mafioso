@@ -7,14 +7,8 @@
 #include <vector>
 
 
-Room::Room(int count, std::string name, Player leader, std::vector<Player> players, Settings settings)
+Room::Room(Roles roles, Settings settings)
 {
-	this->count = count;
-	this->name = name;
-	this->leader = leader;
-	this->players = players;
+	this->roles = roles;
 	this->settings = settings;
-}
-Room::~Room() {
-
 }

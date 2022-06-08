@@ -60,6 +60,29 @@ Component Wrap(std::string name, Component component) {
     });
 }
 
+Element VillageString(int vill, int doc, int cop, int esc, int arms) {
+    return text(
+        "Villager: " + std::to_string(vill) + " | " +
+        "Doctor: " + std::to_string(doc) + " | " +
+        "Cop: " + std::to_string(cop) + " | " +
+        "Escort: " + std::to_string(esc) + " | " +
+        "Arms Dealer: " + std::to_string(arms)
+    );
+}
+
+Element MafiaString(int godf, int mafia) {
+    return text(
+        "Godfather: " + std::to_string(godf) + " | " +
+        "Mafioso: " + std::to_string(mafia)
+    );
+}
+
+Element IndependentString(int jest) {
+    return text(
+        "Jester: " + std::to_string(jest)
+    );
+}
+
 void room_setup(SOCKET &ConnectSocket) {
     /////////////////////////////////////////////////////////////////
     // Room setup
@@ -91,37 +114,37 @@ void room_setup(SOCKET &ConnectSocket) {
     auto role_tab_toggle = Toggle(&tab_values, &role_tab_selected);
 
     // -- Village
-    bool villager_selected = false;
-    bool doctor_selected = false;
-    bool cop_selected = false;
-    bool escort_selected = false;
-    bool armsdealer_selected = false;
+    int villager_count = 0;
+    int doctor_count = 0;
+    int cop_count = 0;
+    int escort_count = 0;
+    int armsdealer_count = 0;
     // -- Mafia
-    bool godfather_selected = false;
-    bool mafioso_selected = false;
+    int godfather_count = 0;
+    int mafioso_count = 0;
     // -- Independent
-    bool jester_selected = false;
+    int jester_count = 0;
 
     auto village_tab_component = Container::Vertical(
         {
-        Checkbox("Villager", &villager_selected),
-        Checkbox("Doctor", &doctor_selected),
-        Checkbox("Cop", &cop_selected),
-        Checkbox("Escort", &escort_selected),
-        Checkbox("Arms dealer", &armsdealer_selected),
+        Slider("Villager", &villager_count, 0, 5, 1),
+        Slider("Doctor", &doctor_count, 0, 5, 1),
+        Slider("Cop", &cop_count, 0, 5, 1),
+        Slider("Escort", &escort_count, 0, 5, 1),
+        Slider("Arms dealer", &armsdealer_count, 0, 5, 1),
         }
     );
 
     auto mafia_tab_component = Container::Vertical(
         {
-        Checkbox("Godfather", &godfather_selected),
-        Checkbox("Mafioso", &mafioso_selected),
+        Slider("Godfather", &godfather_count, 0, 5, 1),
+        Slider("Mafioso", &mafioso_count, 0, 5, 1),
         }
     );
 
     auto independent_tab_component = Container::Vertical(
         {
-        Checkbox("Jester", &jester_selected),
+        Slider("Jester", &jester_count, 0, 5, 1),
         }
     );
 
@@ -152,24 +175,28 @@ void room_setup(SOCKET &ConnectSocket) {
     auto setup_component = Renderer(setup_layout, [&] {
         return vbox({
             hbox({
-                text("Room setup! You are the leader.") | ftxui::border | flex,
+                text("Room setup! You are the leader.") | ftxui::borderRounded | flex,
             }),
-            separator(),
-            hbox(text("Day length (in mins) "), text(std::to_string(day_length))),
+            separatorDouble(),
+            hbox(text("Day length (in mins): "), text(std::to_string(day_length))),
             slider_day->Render(),
-            hbox(text("Night length (in mins) "), text(std::to_string(night_length))),
+            hbox(text("Night length (in mins): "), text(std::to_string(night_length))),
             slider_night->Render(),
-            separator(),
+            separatorDouble(),
             checkboxes->Render(),
-            separator(),
+            separatorDouble(),
 
             role_tab_toggle->Render(),
-            separator(),
+            separatorDouble(),
             role_tab_container->Render(),
-
             separator(),
+            VillageString(villager_count, doctor_count, cop_count, escort_count, armsdealer_count),
+            MafiaString(godfather_count, mafioso_count),
+            IndependentString(jester_count),
+
+            separatorDouble(),
             setup_buttons->Render(),
-            }) | border;
+            }) | borderHeavy;
         });
     setup_screen.Loop(setup_component);
 
@@ -177,25 +204,25 @@ void room_setup(SOCKET &ConnectSocket) {
     // Json
 
     Settings s{
-    day_length,
-    night_length,
-    last_will_selected,
-    no_reveal_selected,
-    day_start_selected,
+        day_length,
+        night_length,
+        last_will_selected,
+        no_reveal_selected,
+        day_start_selected,
     };
 
     Roles r{
         // -- Village
-    villager_selected,
-    doctor_selected,
-    cop_selected,
-    escort_selected,
-    armsdealer_selected,
-    // -- Mafia
-    godfather_selected,
-    mafioso_selected,
-    // -- Independent
-    jester_selected,
+        villager_count,
+        doctor_count,
+        cop_count,
+        escort_count,
+        armsdealer_count,
+        // -- Mafia
+        godfather_count,
+        mafioso_count,
+        // -- Independent
+        jester_count,
     };
 
     nlohmann::json roles_json;
@@ -227,7 +254,7 @@ void room_setup(SOCKET &ConnectSocket) {
         return;
 }
 
-void recieve_setup(SOCKET &ConnectSocket, Roles &r, Settings &s, int &done) {
+void recieve_setup(SOCKET &ConnectSocket, Room &r, int &done) {
     std::vector<char> roles_buf(1024);
     std::string roles_json_str;
     int iResult = 0;
@@ -255,7 +282,7 @@ void recieve_setup(SOCKET &ConnectSocket, Roles &r, Settings &s, int &done) {
     json roles_json = json::parse(roles_json_str);
     json settings_json = json::parse(settings_json_str);
 
-    r = {
+    Roles roles = {
         roles_json["villager"],
         roles_json["doctor"],
         roles_json["cop"],
@@ -266,13 +293,16 @@ void recieve_setup(SOCKET &ConnectSocket, Roles &r, Settings &s, int &done) {
         roles_json["jester"],
     };
 
-    s = {
+    Settings settings = {
         settings_json["day_length"],
         settings_json["night_length"],
         settings_json["last_will"],
         settings_json["no_reveal"],
         settings_json["day_start"],
     };
+
+    r.roles = roles;
+    r.settings = settings;
 
     std::cout << roles_json_str << std::endl;
     std::cout << settings_json_str << std::endl;
@@ -373,11 +403,11 @@ void handle_player () {
     }
     else {
         int done = 0;
-        Roles r;
-        Settings s;
-        auto future = std::async(std::launch::async, recieve_setup, std::ref(ConnectSocket), std::ref(r), std::ref(s), std::ref(done));
-        wait_for_setup(done);
-        std::cout << "Done" << std::endl;
+        Room r;
+        auto future = std::async(std::launch::async, recieve_setup, std::ref(ConnectSocket), std::ref(r), std::ref(done));
+        if (wait_for_setup(done)) {
+            return;
+        }
     }
     
     /////////////////////////////////////////////////////////////////
