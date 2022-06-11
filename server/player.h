@@ -9,10 +9,10 @@ class Player
 public:
 	std::string name;
 	SOCKET socket;
-	Role role;
+	Role *role;
 
 	Player() = default;
-	Player(std::string name, SOCKET socket, Role role);
+	Player(std::string name, SOCKET socket, Role *role);
 	~Player();
 
 private:

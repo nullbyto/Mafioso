@@ -47,6 +47,12 @@ using json = nlohmann::json;
 #include "connection.h"
 #include "../server/room.h"
 
+// Globals
+static Room room = {};
+static nlohmann::json roomJSON;
+static int done_setup = 0;
+static std::mutex mu;
+
 using namespace ftxui;
 
 Component Wrap(std::string name, Component component) {
@@ -83,7 +89,7 @@ Element IndependentString(int jest) {
     );
 }
 
-void room_setup(SOCKET &ConnectSocket) {
+void room_setup(SOCKET ConnectSocket) {
     /////////////////////////////////////////////////////////////////
     // Room setup
 
@@ -176,7 +182,7 @@ void room_setup(SOCKET &ConnectSocket) {
         return vbox({
             hbox({
                 text("Room setup! You are the leader.") | ftxui::borderRounded | flex,
-            }),
+            }) | bold,
             separatorDouble(),
             hbox(text("Day length (in mins): "), text(std::to_string(day_length))),
             slider_day->Render(),
@@ -203,7 +209,7 @@ void room_setup(SOCKET &ConnectSocket) {
     /////////////////////////////////////////////////////////////////
     // Json
 
-    Settings s{
+    Settings s {
         day_length,
         night_length,
         last_will_selected,
@@ -211,7 +217,7 @@ void room_setup(SOCKET &ConnectSocket) {
         day_start_selected,
     };
 
-    Roles r{
+    Roles r {
         // -- Village
         villager_count,
         doctor_count,
@@ -224,6 +230,9 @@ void room_setup(SOCKET &ConnectSocket) {
         // -- Independent
         jester_count,
     };
+
+    room.roles = r;
+    room.settings = s;
 
     nlohmann::json roles_json;
     roles_json["villager"] = r.villager;
@@ -242,83 +251,74 @@ void room_setup(SOCKET &ConnectSocket) {
     settings_json["no_reveal"] = s.no_reveal;
     settings_json["day_start"] = s.day_start;
 
+    nlohmann::json room_json = {
+        {"settings", settings_json}, {"roles", roles_json}
+    };
+
+    roomJSON = room_json;
+
     /////////////////////////////////////////////////////////////////
     // Send JSON
 
-    auto roles_json_str = roles_json.dump();
-    auto settings_json_str = settings_json.dump();
-    if (send_data(ConnectSocket, roles_json_str.data()) <= 0)
-        return;
+    auto room_json_str = room_json.dump();
+    std::cout << room_json_str << std::endl;
 
-    if (send_data(ConnectSocket, settings_json_str.data()) <= 0)
+    if (send_data(ConnectSocket, room_json_str.data()) <= 0)
         return;
 }
 
-void recieve_setup(SOCKET &ConnectSocket, Room &r, int &done) {
-    std::vector<char> roles_buf(1024);
-    std::string roles_json_str;
+void recieve_setup(SOCKET ConnectSocket) {
+    std::vector<char> room_buf(1024);
+    std::string room_json_str;
     int iResult = 0;
     while (iResult <= 0) {
-        iResult = recieve_data(ConnectSocket, roles_buf);
+        iResult = recieve_data(ConnectSocket, room_buf);
         if (iResult == 0 || iResult == -1) {
             std::cout << "Lost connection to server!" << std::endl;
             return;
         }
     }
-    roles_json_str.append(roles_buf.cbegin(), roles_buf.cend());
+    room_json_str.append(room_buf.cbegin(), room_buf.cend());
 
-    std::vector<char> settings_buf(1024);
-    std::string settings_json_str;
-    iResult = 0;
-    while (iResult <= 0) {
-        iResult = recieve_data(ConnectSocket, settings_buf);
-        if (iResult == 0 || iResult == -1) {
-            std::cout << "Lost connection to server!" << std::endl;
-            return;
-        }
-    }
-    settings_json_str.append(settings_buf.cbegin(), settings_buf.cend());
-
-    json roles_json = json::parse(roles_json_str);
-    json settings_json = json::parse(settings_json_str);
+    json room_json = json::parse(room_json_str);
+    roomJSON = room_json;
 
     Roles roles = {
-        roles_json["villager"],
-        roles_json["doctor"],
-        roles_json["cop"],
-        roles_json["escort"],
-        roles_json["armsdealer"],
-        roles_json["godfather"],
-        roles_json["mafioso"],
-        roles_json["jester"],
+        room_json["roles"]["villager"],
+        room_json["roles"]["doctor"],
+        room_json["roles"]["cop"],
+        room_json["roles"]["escort"],
+        room_json["roles"]["armsdealer"],
+        room_json["roles"]["godfather"],
+        room_json["roles"]["mafioso"],
+        room_json["roles"]["jester"],
     };
 
     Settings settings = {
-        settings_json["day_length"],
-        settings_json["night_length"],
-        settings_json["last_will"],
-        settings_json["no_reveal"],
-        settings_json["day_start"],
+        room_json["settings"]["day_length"],
+        room_json["settings"]["night_length"],
+        room_json["settings"]["last_will"],
+        room_json["settings"]["no_reveal"],
+        room_json["settings"]["day_start"],
     };
 
-    r.roles = roles;
-    r.settings = settings;
+    std::cout << room_json_str << std::endl;
+    
+    room.roles = roles;
+    room.settings = settings;
 
-    std::cout << roles_json_str << std::endl;
-    std::cout << settings_json_str << std::endl;
-
-    done = 1;
+    done_setup = 1;
 }
 
-int wait_for_setup(int &done) {
+int wait_for_setup() {
     using namespace ftxui;
     using namespace std::chrono_literals;
 
     std::string reset_position;
     for (int index = 0; index < 1000; ++index) {
         // Check if setup recieved
-        if (done > 0) {
-            return done;
+        if (done_setup > 0) {
+            return done_setup;
         }
 
         std::vector<Element> entries;
@@ -346,6 +346,83 @@ int wait_for_setup(int &done) {
     return 0;
 }
 
+void start_game() {
+    system("cls");
+
+    const std::vector<std::string> entries = {
+        "Player 1",
+        "Player 2",
+        "Player 3",
+        "Player 4",
+        "Player 5",
+        "Player 6",
+        "Player 7",
+    };
+
+    int selected = 0;
+
+    auto players_layout = Container::Vertical({
+        Radiobox(&entries, &selected)
+        });
+    /*for (int i = 0; i < 30; ++i) {
+        players_layout->Add(Radiobox(&entries, &selected));
+    }*/
+
+    std::string action_name = "Kill";
+
+    // Action and player selection
+    auto players_list = Renderer(players_layout, [&] {
+        return window(text("Action:"), vbox({text(action_name), separator(), players_layout->Render() | vscroll_indicator | frame |
+            size(HEIGHT, LESS_THAN, 10)  }) | border);
+        });
+
+    // Last will window + input
+    std::string lastwill_buf;
+    Component input_lastwill = Input(&lastwill_buf, "");
+    auto lastwill_window = window(text("Last will"), input_lastwill->Render());
+
+    // -- Layouts -------------------------------------------------
+
+    auto right_side = Container::Vertical({
+        players_list,
+        input_lastwill,
+        });
+
+    auto left_side = Container::Vertical({
+        });
+
+    auto chat = Container::Vertical({
+
+        });
+
+    auto game_layout = Container::Horizontal({
+        left_side,
+        chat,
+        right_side,
+        });
+
+    auto page_component = Renderer(game_layout, [&] {
+        return hbox({
+                vbox({
+
+                }), 
+                filler(), 
+                
+                vbox({}),
+
+                vbox({
+                    players_list->Render(),
+                    vbox({
+                        window(text("Last will"), input_lastwill->Render())
+                        }) | size(WIDTH, LESS_THAN, 20),
+                }),
+            });
+        });
+
+    auto screen = ScreenInteractive::TerminalOutput();
+    screen.Loop(page_component);
+}
+
 void handle_player () {
 	SOCKET ConnectSocket = NULL;
     do {
@@ -369,6 +446,12 @@ void handle_player () {
 
     auto renderer = Renderer(component_input, [&] {
         return vbox({
+                   hbox({
+                        text("Hello "),
+                        text(name_buf) | underlined,
+                        text(". Welcome to Mafioso!"),
+                   }) | bold,
+                   separator(),
                    hbox(text("Player name: "), input_name->Render()),
             }) |
             border;
@@ -394,82 +477,23 @@ void handle_player () {
     }
     int clients_count = clients_buf;
 
-    std::cout << "Clients count = " << clients_count << std::endl;
+    //std::cout << "Clients count = " << clients_count << std::endl;
 
     /////////////////////////////////////////////////////////////////
 
     if (clients_count == 1) {
         room_setup(ConnectSocket);
+        start_game();
     }
-    else {
-        int done = 0;
-        Room r;
-        auto future = std::async(std::launch::async, recieve_setup, std::ref(ConnectSocket), std::ref(r), std::ref(done));
-        if (wait_for_setup(done)) {
+    else if (done_setup == 0) {
+        auto future = std::async(std::launch::async, recieve_setup, std::ref(ConnectSocket));
+        if (wait_for_setup()) {
+            start_game();
+            while (1) {};
             return;
         }
     }
-    
-    /////////////////////////////////////////////////////////////////
-    // Room
-    
-    // hbox
-    //    Element document =
-    //    hbox({
-    //        text("Room setup! You are the leader.") | ftxui::border | flex,
-    //        });
-
-    //auto screen_top = Screen::Create(
-    //    Dimension::Full(),       // Width
-    //    Dimension::Fit(document) // Height
-    //);
-    //ftxui::Render(screen_top, document);
-    //screen_top.Print();
-    // 
-    //std::cout << std::endl;
-
-
-    /////////////////////////////////////////////////////////////////
-
-    //// Menu
-    //auto screen = ScreenInteractive::TerminalOutput();
-
-    //std::vector<std::string> entries = {
-    //    "entry 1",
-    //    "entry 2",
-    //    "entry 3",
-    //};
-    //int selected = 0;
-
-    //MenuOption option;
-    //option.on_enter = screen.ExitLoopClosure();
-    //auto menu = Menu(&entries, &selected, &option);
-    ////auto menu = Menu(&entries, &selected);
-
-
-
-    //// The tree of components. This defines how to navigate using the keyboard.
-    //auto buttons = Container::Horizontal({
-    //    Button("Create Room", [&] { return; }),
-    //    Button("Refresh", [&] { return; }),
-    //    Button("Disconnect", [&] {disconnect(ConnectSocket); exit(0); }),
-    //    });
-
-    //// -- Layout -----------------------------------------------------------------
-    //auto layout = Container::Vertical({
-    //    menu,
-    //    buttons,
-    //    });
-
-    //// Modify the way to render them on screen:
-    //auto component = Renderer(layout, [&] {
-    //    return vbox({
-    //            menu->Render(),
-    //            separator(),
-    //            buttons->Render(),
-    //        });
-    //    });
-
-    //screen.Loop(component);
-    ////std::cout << selected;
+    /*else if (done_setup == 1) {
+        recieve_setup(ConnectSocket, done_setup);
+    }*/
 }

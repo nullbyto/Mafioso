@@ -4,7 +4,7 @@
 #include "player.h"
 
 
-Player::Player(std::string name, SOCKET socket, Role role)
+Player::Player(std::string name, SOCKET socket, Role *role)
 {
 	this->name = name;
 	this->socket = socket;

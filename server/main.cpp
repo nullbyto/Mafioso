@@ -16,14 +16,12 @@ int main() {
 
 	//////////////////////////////////////////
 
-	//std::vector<std::thread> pool;
 	std::list<SOCKET> clients;
 	std::list<std::future<void>> clients_futures;
 
 	SOCKET ClientSocket = INVALID_SOCKET;
 
 	// Accept a client socket
-
 
 	// THREADING
 	/*while (1) {
@@ -41,8 +39,6 @@ int main() {
 		std::cout << clients.size() << "\n";
 	}*/
 
-	//std::thread t1(keepalive, std::ref(clients));
-
 	// ASYNC
 	while (1) {
 		ClientSocket = accept(ListenSocket, NULL, NULL);
@@ -53,11 +49,7 @@ int main() {
 			return 0;
 		}
 		clients_futures.push_back(std::async(std::launch::async, handle_client, std::ref(ClientSocket), std::ref(clients)));
-		
-		/*clients_mutex.lock();
-		clients.push_back(ClientSocket);
-		clients_mutex.unlock();*/
-		std::cout << clients.size() << "\n";
+		std::cout << "Clients count: " << clients.size() << std::endl;
 	}
 
 	return 0;

@@ -34,6 +34,7 @@ START:
     switch (selected) {
     case 0:
         handle_player();
+        system("cls");
         goto START;
         break;
     case 1:
