@@ -347,7 +347,14 @@ int wait_for_setup() {
 }
 
 void start_game() {
+    // Clear screen
     system("cls");
+
+    // Full screen
+    system("mode 650");
+    ShowWindow(GetConsoleWindow(), SW_MAXIMIZE);
+
+    auto screen = ScreenInteractive::TerminalOutput();
 
     const std::vector<std::string> entries = {
         "Player 1",
@@ -359,40 +366,76 @@ void start_game() {
         "Player 7",
     };
 
+    // -- Action target ---------------------------------------
+
     int selected = 0;
 
-    auto players_layout = Container::Vertical({
+    auto target_select_layout = Container::Vertical({
         Radiobox(&entries, &selected)
         });
-    /*for (int i = 0; i < 30; ++i) {
-        players_layout->Add(Radiobox(&entries, &selected));
-    }*/
 
     std::string action_name = "Kill";
 
     // Action and player selection
-    auto players_list = Renderer(players_layout, [&] {
-        return window(text("Action:"), vbox({text(action_name), separator(), players_layout->Render() | vscroll_indicator | frame |
+    auto targets_list = Renderer(target_select_layout, [&] {
+        return window(text("Action:"), vbox({text(action_name), separator(), target_select_layout->Render() | vscroll_indicator | frame |
             size(HEIGHT, LESS_THAN, 10)  }) | border);
         });
 
-    // Last will window + input
-    std::string lastwill_buf;
-    Component input_lastwill = Input(&lastwill_buf, "");
-    auto lastwill_window = window(text("Last will"), input_lastwill->Render());
+    // Last will input lines + window
+    InputOption lastwill_option;
+    lastwill_option.on_enter = screen.ExitLoopClosure();
+    std::vector<std::string> lastwill_lines(6);
+    Component input_lastwill_1 = Input(&lastwill_lines[0], "", lastwill_option); // input option for debugging
+    Component input_lastwill_2 = Input(&lastwill_lines[1], "");
+    Component input_lastwill_3 = Input(&lastwill_lines[2], "");
+    Component input_lastwill_4 = Input(&lastwill_lines[3], "");
+    Component input_lastwill_5 = Input(&lastwill_lines[4], "");
+    Component input_lastwill_6 = Input(&lastwill_lines[5], "");
+
+    auto input_lastwill = Container::Vertical({
+        input_lastwill_1,
+        input_lastwill_2,
+        input_lastwill_3,
+        input_lastwill_4,
+        input_lastwill_5,
+        input_lastwill_6,
+        });
+
+    //auto lastwill_window = window(text("Last will"), input_lastwill->Render());
+
+    // -- Players list --------------------------------------------
+
+    int player_alive_selected = 0;
+    auto players_alive_menu = Menu(&entries, &player_alive_selected);
+
+    int player_dead_selected = 0;
+    auto players_dead_menu = Menu(&entries, &player_dead_selected);
+
+    // -- Chat ----------------------------------------------------
+
+    std::string chat_input_buf;
+    InputOption chat_input_option;
+    chat_input_option.on_enter = [&] { /*send_chat();*/ };
+    Component chat_input = Input(&chat_input_buf, "", chat_input_option);
+
+
 
     // -- Layouts -------------------------------------------------
 
     auto right_side = Container::Vertical({
-        players_list,
+        targets_list,
         input_lastwill,
         });
 
     auto left_side = Container::Vertical({
+        players_alive_menu,
+        players_dead_menu,
         });
 
     auto chat = Container::Vertical({
-
+        //
+        chat_input
         });
 
     auto game_layout = Container::Horizontal({
@@ -403,24 +446,42 @@ void start_game() {
 
     auto page_component = Renderer(game_layout, [&] {
         return hbox({
+            // -- Left side --
+            vbox({
+                window(text("Alive players:"), vbox({ players_alive_menu->Render() | vscroll_indicator | frame |
+                    size(HEIGHT, EQUAL, 15)})),
+                window(text("Dead players:"), vbox({ players_dead_menu->Render() | vscroll_indicator | frame |
+                    size(HEIGHT, EQUAL, 15)})),
+            }) | size(WIDTH, EQUAL, 30),
+
+            filler(),
+
+            // -- Center --
+            vbox({
+                text("Chat:"),
+                separator(),
                 vbox({
 
-                }), 
-                filler(), 
-                
-                vbox({}),
+                }) | size(HEIGHT, EQUAL, 28),
+                separator(),
+                hbox(text("Your msg: "), chat_input->Render()) | border,
+            }) | size(WIDTH, EQUAL, 100) | border,
 
+            filler(),
+
+            // -- Right side --
+            vbox({
+                targets_list->Render() | size(HEIGHT, EQUAL, 15),
                 vbox({
-                    players_list->Render(),
-                    vbox({
-                        window(text("Last will"), input_lastwill->Render())
-                        }) | size(WIDTH, LESS_THAN, 20),
-                }),
-            });
+                    window(text("Last will"), input_lastwill->Render())
+                    }) | size(WIDTH, EQUAL, 60),
+            }) | size(HEIGHT, EQUAL, 30),
+        }) | borderHeavy;
         });
 
-    auto screen = ScreenInteractive::TerminalOutput();
     screen.Loop(page_component);
+
+    while(1){}
 }
 
 void handle_player () {
