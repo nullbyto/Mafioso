@@ -48,6 +48,8 @@ using json = nlohmann::json;
 #include "../server/room.h"
 
 // Globals
+static SOCKET server_sock = NULL;
+
 static Room room = {};
 static nlohmann::json roomJSON;
 static int done_setup = 0;
@@ -346,6 +348,12 @@ int wait_for_setup() {
     return 0;
 }
 
+void send_chat(std::string msg_buf) {
+    std::string msg = "0#";
+    msg += msg_buf;
+    send_data(server_sock, msg.data());
+}
+
 void start_game() {
     // Clear screen
     system("cls");
@@ -416,10 +424,12 @@ void start_game() {
 
     std::string chat_input_buf;
     InputOption chat_input_option;
-    chat_input_option.on_enter = [&] { /*send_chat();*/ };
+
+    chat_input_option.on_enter = [&] {
+        send_chat(chat_input_buf);
+        chat_input_buf = "";
+    };
     Component chat_input = Input(&chat_input_buf, "", chat_input_option);
-
-
 
     // -- Layouts -------------------------------------------------
 
@@ -464,7 +474,7 @@ void start_game() {
 
                 }) | size(HEIGHT, EQUAL, 28),
                 separator(),
-                hbox(text("Your msg: "), chat_input->Render()) | border,
+                hbox(text("Your msg: ") | underlined, chat_input->Render()) | border,
             }) | size(WIDTH, EQUAL, 100) | border,
 
             filler(),
@@ -477,7 +487,7 @@ void start_game() {
                     }) | size(WIDTH, EQUAL, 60),
             }) | size(HEIGHT, EQUAL, 30),
         }) | borderHeavy;
-        });
+    });
 
     screen.Loop(page_component);
 
@@ -488,6 +498,7 @@ void handle_player () {
 	SOCKET ConnectSocket = NULL;
     do {
         ConnectSocket = connect();
+        server_sock = ConnectSocket;
     } while (ConnectSocket == NULL);
     
 	system("cls");

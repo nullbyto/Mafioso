@@ -12,12 +12,16 @@ using json = nlohmann::json;
 
 #include "room.h"
 #include "main.h"
+#include "connection.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 
 #define PORT "5555"
 #define SERVER_IP "127.0.0.1"
 #define DEFAULT_BUFLEN 1024
+
+#define CHAT_FLAG "0#"
+#define GAME_FLAG "1#"
 
 static int done = 0;
 static bool first = true;
@@ -289,6 +293,10 @@ int recieve_setup(SOCKET& ClientSocket, std::list<SOCKET>& clients) {
 	return iResult;
 }
 
+void handle_chat(SOCKET& ClientSocket, std::string msg) {
+	std::cout << msg.substr(2, msg.size());
+}
+
 void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 	int iResult = 0;
 
@@ -337,8 +345,8 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 		leader = ClientSocket;
 		if (recieve_setup(ClientSocket, clients) > 0) {
 			broadcast_data(clients, roomJSON.dump().data(), ClientSocket);
+			// Set flag to be done so other clients know a room has been created
 			done = 1;
-			return;
 		}
 	}
 	else {
@@ -346,12 +354,39 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 		while (done == 0) {
 
 		}
-		broadcast_data(clients, roomJSON.dump().data(), leader);
+		//broadcast_data(clients, roomJSON.dump().data(), leader);
+		send_data(ClientSocket, roomJSON.dump().data());
 	}
+
+	/////////////////////////////////////////////////////////////////
+	// Loop gamestate + chat
 
 	while (1) {
+		std::vector<char> data_buf(DEFAULT_BUFLEN);
+		std::string data;
 
+		iResult = 0;
+		iResult = recieve_data(ClientSocket, data_buf);
+		if (iResult == 0 || iResult == -1) {
+			std::cout << "[" << ip_str << "] disconnected" << std::endl;
+			std::lock_guard<std::mutex> lock(clients_mutex);
+			clients.remove(ClientSocket);
+			closesocket(ClientSocket);
+			WSACleanup();
+			return;
+		}
+		data.append(data_buf.cbegin(), data_buf.cend());
+
+		auto prefix = data.substr(0, 2);
+
+		if (prefix == CHAT_FLAG) {
+			handle_chat(ClientSocket, data);
+		}
+		else if (prefix == GAME_FLAG) {
+			std::cout << "ma3\n";
+		}
 	}
+
 
 	return;
 }
