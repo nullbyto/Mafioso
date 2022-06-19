@@ -466,6 +466,7 @@ void start_game() {
         return vbox(std::move(elements));
         });
 
+    //auto chat_msgs_selected = 0;
     auto chat_msgs_menu = Menu(&chat_msgs, &chat_msgs_selected);
 
     std::string chat_input_buf;
@@ -520,7 +521,7 @@ void start_game() {
                 text("Chat:"),
                 separator(),
                 vbox({
-                    //chat_component->Render() | frame | size(HEIGHT, LESS_THAN, 28) ,
+                    //chat_component->Render() | focusPositionRelative(0, 1) | yframe,
                     chat_msgs_menu->Render() | vscroll_indicator | frame,
                 }) | size(HEIGHT, EQUAL, 28),
                 separator(),
