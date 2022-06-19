@@ -293,8 +293,10 @@ int recieve_setup(SOCKET& ClientSocket, std::list<SOCKET>& clients) {
 	return iResult;
 }
 
-void handle_chat(SOCKET& ClientSocket, std::string msg) {
-	std::cout << msg.substr(2, msg.size());
+void handle_chat(SOCKET& ClientSocket, std::string msg, std::list<SOCKET> &clients) {
+	std::string raw_msg = msg.substr(2, msg.size());
+	std::cout << raw_msg << std::endl;
+	broadcast_data(clients, msg.data(), NULL);
 }
 
 void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
@@ -356,6 +358,10 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 		}
 		//broadcast_data(clients, roomJSON.dump().data(), leader);
 		send_data(ClientSocket, roomJSON.dump().data());
+		//// Broadcast user joining server
+		//std::string joined_msg = CHAT_FLAG;
+		//joined_msg += "[Server]: " + client_name + " joined the server\n";
+		//broadcast_data(clients, joined_msg.data(), leader);
 	}
 
 	/////////////////////////////////////////////////////////////////
@@ -373,6 +379,9 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 			clients.remove(ClientSocket);
 			closesocket(ClientSocket);
 			WSACleanup();
+			std::string joined_msg = CHAT_FLAG;
+			joined_msg += "[Server]: " + client_name + " joined the server\n";
+			broadcast_data(clients, joined_msg.data(), leader);
 			return;
 		}
 		data.append(data_buf.cbegin(), data_buf.cend());
@@ -380,7 +389,7 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 		auto prefix = data.substr(0, 2);
 
 		if (prefix == CHAT_FLAG) {
-			handle_chat(ClientSocket, data);
+			handle_chat(ClientSocket, data, clients);
 		}
 		else if (prefix == GAME_FLAG) {
 			std::cout << "ma3\n";

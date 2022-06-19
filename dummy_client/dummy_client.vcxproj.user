@@ -4,4 +4,8 @@
     <LocalDebuggerCommand>C:\Users\Amin\Git\nullbyto\Mafioso\x64\Debug\client.exe</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LocalDebuggerCommand>C:\Users\Amin\Git\nullbyto\Mafioso\x64\Release\client.exe</LocalDebuggerCommand>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
 </Project>

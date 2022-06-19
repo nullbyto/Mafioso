@@ -35,25 +35,33 @@
 #include "ftxui/dom/elements.hpp"  // for text, hbox, separator, Element, operator|, vbox, border
 #include "ftxui/util/ref.hpp"  // for Ref
 
-// JSON
+// -- JSON
 #include "nlohmann/json.hpp"
 using json = nlohmann::json;
 
-// general
+// -- general
 #include <cstdlib>      // for exit function
 #include <future>       // for async
 
-// Game
+// -- Game
 #include "connection.h"
 #include "../server/room.h"
 
-// Globals
+// -- Globals ---------------
+#define CHAT_FLAG "0#"
+#define GAME_FLAG "1#"
 static SOCKET server_sock = NULL;
 
 static Room room = {};
 static nlohmann::json roomJSON;
 static int done_setup = 0;
 static std::mutex mu;
+
+static std::string player_name;
+
+static int chat_msgs_selected = 0;
+static std::vector<std::string> chat_msgs = {};
+//static std::string chat_msgss = "";
 
 using namespace ftxui;
 
@@ -273,13 +281,12 @@ void recieve_setup(SOCKET ConnectSocket) {
     std::vector<char> room_buf(1024);
     std::string room_json_str;
     int iResult = 0;
-    while (iResult <= 0) {
-        iResult = recieve_data(ConnectSocket, room_buf);
-        if (iResult == 0 || iResult == -1) {
-            std::cout << "Lost connection to server!" << std::endl;
-            return;
-        }
+    iResult = recieve_data(ConnectSocket, room_buf);
+    if (iResult == 0 || iResult == -1) {
+        std::cout << "Lost connection to server!" << std::endl;
+        return;
     }
+
     room_json_str.append(room_buf.cbegin(), room_buf.cend());
 
     json room_json = json::parse(room_json_str);
@@ -349,9 +356,38 @@ int wait_for_setup() {
 }
 
 void send_chat(std::string msg_buf) {
-    std::string msg = "0#";
+    std::string msg = CHAT_FLAG;
+    msg += player_name + ": ";
     msg += msg_buf;
     send_data(server_sock, msg.data());
+}
+
+void handle_data() {
+    while (1) {
+        std::vector<char> data_buf(1024);
+        std::string data;
+        int iResult = 0;
+        iResult = recieve_data(server_sock, data_buf);
+        if (iResult == 0 || iResult == -1) {
+            std::cout << "Lost connection to server!" << std::endl;
+            return;
+        }
+        data.append(data_buf.cbegin(), data_buf.cend());
+
+        auto prefix = data.substr(0, 2);
+
+        if (prefix == CHAT_FLAG) {
+            chat_msgs.push_back(data.substr(2, data.size()));
+            // Change selected msg in chat to scroll focus to bottom
+            chat_msgs_selected = chat_msgs.size() - 1;
+            //chat_msgss += "\n";
+            //chat_msgss += data.substr(2, data.size());
+        }
+        else if (prefix == GAME_FLAG) {
+            std::cout << "ma3\n";
+        }
+    }
+
 }
 
 void start_game() {
@@ -420,12 +456,24 @@ void start_game() {
     int player_dead_selected = 0;
     auto players_dead_menu = Menu(&entries, &player_dead_selected);
 
-    // -- Chat ----------------------------------------------------
+    // -- Chat 
+
+    auto chat_component = Renderer([&] {
+        Elements elements;
+        for (auto& line : chat_msgs) {
+            elements.push_back(text(line));
+        }
+        return vbox(std::move(elements));
+        });
+
+    auto chat_msgs_menu = Menu(&chat_msgs, &chat_msgs_selected);
 
     std::string chat_input_buf;
     InputOption chat_input_option;
-
     chat_input_option.on_enter = [&] {
+        if (chat_input_buf == "") {
+            return;
+        }
         send_chat(chat_input_buf);
         chat_input_buf = "";
     };
@@ -444,8 +492,9 @@ void start_game() {
         });
 
     auto chat = Container::Vertical({
-        //
-        chat_input
+        chat_msgs_menu,
+        //chat_component,
+        chat_input,
         });
 
     auto game_layout = Container::Horizontal({
@@ -471,7 +520,8 @@ void start_game() {
                 text("Chat:"),
                 separator(),
                 vbox({
-
+                    //chat_component->Render() | frame | size(HEIGHT, LESS_THAN, 28) ,
+                    chat_msgs_menu->Render() | vscroll_indicator | frame,
                 }) | size(HEIGHT, EQUAL, 28),
                 separator(),
                 hbox(text("Your msg: ") | underlined, chat_input->Render()) | border,
@@ -530,6 +580,8 @@ void handle_player () {
     });
     screen_name.Loop(renderer);
 
+    player_name = name_buf;
+
     system("cls");
 
     if (send_data(ConnectSocket, name_buf.data()) <= 0)
@@ -555,17 +607,17 @@ void handle_player () {
 
     if (clients_count == 1) {
         room_setup(ConnectSocket);
-        start_game();
+        //start_game();
     }
     else if (done_setup == 0) {
         auto future = std::async(std::launch::async, recieve_setup, std::ref(ConnectSocket));
-        if (wait_for_setup()) {
-            start_game();
-            while (1) {};
+        if (!wait_for_setup()) {
             return;
         }
     }
-    /*else if (done_setup == 1) {
-        recieve_setup(ConnectSocket, done_setup);
-    }*/
+    std::string joined_msg = CHAT_FLAG;
+    joined_msg += "[Server]: " + player_name + " joined the server\n";
+    send_data(server_sock, joined_msg.data());
+    auto future = std::async(std::launch::async, handle_data);
+    start_game();
 }
