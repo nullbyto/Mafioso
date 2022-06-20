@@ -47,21 +47,29 @@ using json = nlohmann::json;
 #include "connection.h"
 #include "../server/room.h"
 
-// -- Globals ---------------
-#define CHAT_FLAG "0#"
-#define GAME_FLAG "1#"
+// #############################################################
+// #############################################################
+
+// -- Globals -------------------------------
+
+#define FLAG_CHAT "0#"
+#define FLAG_GAME "1#"
+
 static SOCKET server_sock = NULL;
 
-static Room room = {};
-static nlohmann::json roomJSON;
 static int done_setup = 0;
 static std::mutex mu;
 
-static std::string player_name;
-
 static int chat_msgs_selected = 0;
 static std::vector<std::string> chat_msgs = {};
-//static std::string chat_msgss = "";
+
+// Game
+static std::string player_name;
+static Room room = {};
+static nlohmann::json roomJSON;
+static std::list<Player> players {};
+
+// -----------------------------------------
 
 using namespace ftxui;
 
@@ -98,6 +106,9 @@ Element IndependentString(int jest) {
         "Jester: " + std::to_string(jest)
     );
 }
+
+// #############################################################
+// #############################################################
 
 void room_setup(SOCKET ConnectSocket) {
     /////////////////////////////////////////////////////////////////
@@ -311,7 +322,7 @@ void recieve_setup(SOCKET ConnectSocket) {
         room_json["settings"]["day_start"],
     };
 
-    std::cout << room_json_str << std::endl;
+    //std::cout << room_json_str << std::endl;
     
     room.roles = roles;
     room.settings = settings;
@@ -356,7 +367,7 @@ int wait_for_setup() {
 }
 
 void send_chat(std::string msg_buf) {
-    std::string msg = CHAT_FLAG;
+    std::string msg = FLAG_CHAT;
     msg += player_name + ": ";
     msg += msg_buf;
     send_data(server_sock, msg.data());
@@ -376,14 +387,12 @@ void handle_data() {
 
         auto prefix = data.substr(0, 2);
 
-        if (prefix == CHAT_FLAG) {
+        if (prefix == FLAG_CHAT) {
             chat_msgs.push_back(data.substr(2, data.size()));
             // Change selected msg in chat to scroll focus to bottom
-            chat_msgs_selected = chat_msgs.size() - 1;
-            //chat_msgss += "\n";
-            //chat_msgss += data.substr(2, data.size());
+            chat_msgs_selected = (int)chat_msgs.size() - 1;
         }
-        else if (prefix == GAME_FLAG) {
+        else if (prefix == FLAG_GAME) {
             std::cout << "ma3\n";
         }
     }
@@ -525,7 +534,7 @@ void start_game() {
                     chat_msgs_menu->Render() | vscroll_indicator | frame,
                 }) | size(HEIGHT, EQUAL, 28),
                 separator(),
-                hbox(text("Your msg: ") | underlined, chat_input->Render()) | border,
+                hbox(text("Your msg") | underlined, text(": "), chat_input->Render()) | border,
             }) | size(WIDTH, EQUAL, 100) | border,
 
             filler(),
@@ -591,14 +600,12 @@ void handle_player () {
     /////////////////////////////////////////////////////////////////
     // Recieve info about room
 
-    int clients_buf;
+    int clients_buf = 0;
     int iResult = 0;
-    if (iResult <= 0) {
-        iResult = recv(ConnectSocket, (char *)&clients_buf, sizeof(clients_buf), 0);
-        if (iResult == 0 || iResult == -1) {
-            std::cout << "Lost connection to server!" << std::endl;
-            return;
-        }
+    iResult = recv(ConnectSocket, (char *)&clients_buf, sizeof(clients_buf), 0);
+    if (iResult == 0 || iResult == -1) {
+        std::cout << "Lost connection to server!" << std::endl;
+        return;
     }
     int clients_count = clients_buf;
 
@@ -616,7 +623,7 @@ void handle_player () {
             return;
         }
     }
-    std::string joined_msg = CHAT_FLAG;
+    std::string joined_msg = FLAG_CHAT;
     joined_msg += "[Server]: " + player_name + " joined the server\n";
     send_data(server_sock, joined_msg.data());
     auto future = std::async(std::launch::async, handle_data);

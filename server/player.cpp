@@ -3,14 +3,17 @@
 #include "Role.h"
 #include "player.h"
 
+int Player::next_id = 0;
 
-Player::Player(std::string name, SOCKET socket, Role *role)
-{
-	this->name = name;
-	this->socket = socket;
-	this->role = role;
+Player::Player() {
+	this->name = "";
+	this->role = {};
+	this->id = ++next_id;
 }
 
-Player::~Player() {
-
+Player::Player(std::string name, role_code role)
+{
+	this->name = name;
+	this->role = role;
+	this->id = ++next_id;
 }

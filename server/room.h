@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <list>
 #include "player.h"
 
 struct Settings {
@@ -29,11 +30,12 @@ struct Roles {
 class Room
 {
 public:
-    Roles roles;
-	Settings settings;
+    Roles roles = {};
+	Settings settings = {};
+    std::list<Player> players;
 
     Room() = default;
-	Room(Roles roles, Settings settings);
+	Room(Roles roles, Settings settings, std::list<Player> players);
 	~Room() = default;
 
 private:

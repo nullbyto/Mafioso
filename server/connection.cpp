@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <thread>
 #include <mutex>
+#include <map>
+#include <condition_variable>
 
 #include "nlohmann/json.hpp"
 using json = nlohmann::json;
@@ -20,19 +22,21 @@ using json = nlohmann::json;
 #define SERVER_IP "127.0.0.1"
 #define DEFAULT_BUFLEN 1024
 
-#define CHAT_FLAG "0#"
-#define GAME_FLAG "1#"
+#define FLAG_CHAT "0#"
+#define FLAG_GAME "1#"
 
 static int done = 0;
-static bool first = true;
-static std::mutex first_mutex;
+static std::mutex done_mutex;
 static SOCKET leader = NULL;
 
 static Room room = {};
 static nlohmann::json roomJSON;
 static std::mutex room_mutex;
 
-void disconnect(SOCKET &socket, std::list<SOCKET> &clients) {
+static std::mutex players_mutex;
+static std::list<Player> players;//////////
+
+void disconnect(SOCKET socket, std::list<SOCKET> &clients) {
 	// shutdown the send half of the connection since no more data will be sent
 	int iResult = shutdown(socket, SD_SEND);
 	if (iResult == SOCKET_ERROR) {
@@ -213,11 +217,11 @@ char* getipaddr(SOCKET s, bool port)
 	return ipstr;
 }
 
-int recieve_data(SOCKET &ConnectSocket, std::vector<char> &buf) {
-	return recv(ConnectSocket, &buf[0], buf.size(), 0);
+int recieve_data(SOCKET ConnectSocket, std::vector<char> &buf) {
+	return recv(ConnectSocket, &buf[0], (int)buf.size(), 0);
 }
 
-int send_data(SOCKET& ConnectSocket, const char* sendbuf) {
+int send_data(SOCKET ConnectSocket, const char* sendbuf) {
 	int recvbuflen = DEFAULT_BUFLEN;
 	int iResult;
 
@@ -227,12 +231,12 @@ int send_data(SOCKET& ConnectSocket, const char* sendbuf) {
 
 void broadcast_data(std::list<SOCKET> &clients, const char* sendbuf, SOCKET exception) {
 	int recvbuflen = DEFAULT_BUFLEN;
-	int iResult;
+	int iResult = 0;
 
 	for (auto client : clients) {
 		if (client == exception)
 			continue;
-		iResult = send(client, sendbuf, strlen(sendbuf), 0);
+		iResult = send(client, sendbuf, (int)strlen(sendbuf), 0);
 		if (iResult == SOCKET_ERROR) {
 			printf("send failed: %d\n", WSAGetLastError());
 			closesocket(client);
@@ -245,20 +249,20 @@ void broadcast_data(std::list<SOCKET> &clients, const char* sendbuf, SOCKET exce
 	return;
 }
 
-int recieve_setup(SOCKET& ClientSocket, std::list<SOCKET>& clients) {
+int recieve_setup(SOCKET ClientSocket, std::list<SOCKET>& clients) {
 	std::vector<char> room_buf(1024);
 	std::string room_json_str;
 	auto ip_str = getipaddr(ClientSocket, 0);
 	int iResult = 0;
-	if (iResult <= 0) {
-		iResult = recieve_data(ClientSocket, room_buf);
-		if (iResult == 0 || iResult == -1) {
-			std::cout << "[" << ip_str << "] disconnected" << std::endl;
-			std::lock_guard<std::mutex> lock(clients_mutex);
-			clients.remove(ClientSocket);
-			return iResult;
-		}
+	iResult = recieve_data(ClientSocket, room_buf);
+	if (iResult == 0 || iResult == -1) {
+		std::cout << "[" << ip_str << "] disconnected" << std::endl;
+		clients_mutex.lock();
+		clients.remove(ClientSocket);
+		clients_mutex.unlock();
+		return iResult;
 	}
+
 	room_json_str.append(room_buf.cbegin(), room_buf.cend());
 
 	json room_json = json::parse(room_json_str);
@@ -293,9 +297,9 @@ int recieve_setup(SOCKET& ClientSocket, std::list<SOCKET>& clients) {
 	return iResult;
 }
 
-void handle_chat(SOCKET& ClientSocket, std::string msg, std::list<SOCKET> &clients) {
+void handle_chat(SOCKET ClientSocket, std::string msg, std::list<SOCKET> &clients) {
 	std::string raw_msg = msg.substr(2, msg.size());
-	std::cout << raw_msg << std::endl;
+	//std::cout << raw_msg << std::endl;
 	broadcast_data(clients, msg.data(), NULL);
 }
 
@@ -318,6 +322,7 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 		}
 	}
 	client_name.append(name_buf.cbegin(), name_buf.cend());
+	client_name.erase(std::find(client_name.begin(), client_name.end(), '\0'), client_name.end());
 	std::cout << "[" << ip_str << "] " << client_name << " joined the server" << std::endl;
 
 	/////////////////////////////////////////////////////////////////
@@ -325,44 +330,67 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 
 	clients_mutex.lock();
 	clients.push_back(ClientSocket);
-	int clients_count = clients.size();
+	int clients_count = (int)clients.size();
 	clients_mutex.unlock();
 
 	iResult = 0;
-	if (iResult <= 0) {
-		iResult = send(ClientSocket, (char*)&clients_count, sizeof(clients_count), 0);
-		if (iResult == 0) {
-			std::cout << "[" << ip_str << "] disconnected" << std::endl;
-			std::lock_guard<std::mutex> lock(clients_mutex);
-			clients.remove(ClientSocket);
-			return;
-		}
+	iResult = send(ClientSocket, (char*)&clients_count, sizeof(clients_count), 0);
+	if (iResult == 0) {
+		std::cout << "[" << ip_str << "] disconnected" << std::endl;
+		clients_mutex.lock();
+		clients.remove(ClientSocket);
+		clients_mutex.unlock();
+		return;
 	}
 
+	
 	/////////////////////////////////////////////////////////////////
 	// Recieve room setup info
 	// and broadcast room setup if room already set
 
 	if (clients_count == 1) {
-		leader = ClientSocket;
-		if (recieve_setup(ClientSocket, clients) > 0) {
-			broadcast_data(clients, roomJSON.dump().data(), ClientSocket);
-			// Set flag to be done so other clients know a room has been created
-			done = 1;
+		{
+			std::lock_guard lockk(done_mutex);
+			leader = ClientSocket;
+			if (recieve_setup(ClientSocket, clients) > 0) {
+				broadcast_data(clients, roomJSON.dump().data(), ClientSocket);
+				// Set flag to be done so other clients know a room has been created
+				/*done = 1;*/
+			}
 		}
 	}
 	else {
+		std::cout << "Done: " << done << std::endl;
 		// Wait until setup is done
-		while (done == 0) {
-
+		{
+			std::lock_guard lock(done_mutex);
 		}
+		std::cout << "Done: " << done << std::endl;
 		//broadcast_data(clients, roomJSON.dump().data(), leader);
 		send_data(ClientSocket, roomJSON.dump().data());
+
 		//// Broadcast user joining server
 		//std::string joined_msg = CHAT_FLAG;
 		//joined_msg += "[Server]: " + client_name + " joined the server\n";
 		//broadcast_data(clients, joined_msg.data(), leader);
 	}
+
+	Player p = Player(client_name, R_NONE);
+	{
+		std::lock_guard lock(players_mutex);
+		players.push_back(p);
+	}
+	{
+		std::lock_guard lock(room_mutex);
+		room.players = players;
+	}
+
+	json p_json = {
+		{"name", p.name}, {"id", p.id}, {"role", p.role}
+	};
+
+	roomJSON["players"] += p_json;
+	std::cout << roomJSON.dump() << std::endl;
 
 	/////////////////////////////////////////////////////////////////
 	// Loop gamestate + chat
@@ -375,23 +403,30 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 		iResult = recieve_data(ClientSocket, data_buf);
 		if (iResult == 0 || iResult == -1) {
 			std::cout << "[" << ip_str << "] disconnected" << std::endl;
-			std::lock_guard<std::mutex> lock(clients_mutex);
+			clients_mutex.lock();
 			clients.remove(ClientSocket);
+			clients_mutex.unlock();
 			closesocket(ClientSocket);
 			WSACleanup();
-			std::string joined_msg = CHAT_FLAG;
-			joined_msg += "[Server]: " + client_name + " joined the server\n";
-			broadcast_data(clients, joined_msg.data(), leader);
+
+			std::string joined_msg = FLAG_CHAT;
+			joined_msg += "[Server]: " + client_name + " left the server\n";
+
+			/*players_mutex.lock();
+			players.remove(p);
+			players_mutex.unlock();*/
+
+			broadcast_data(clients, joined_msg.data(), NULL);
 			return;
 		}
 		data.append(data_buf.cbegin(), data_buf.cend());
 
 		auto prefix = data.substr(0, 2);
 
-		if (prefix == CHAT_FLAG) {
+		if (prefix == FLAG_CHAT) {
 			handle_chat(ClientSocket, data, clients);
 		}
-		else if (prefix == GAME_FLAG) {
+		else if (prefix == FLAG_GAME) {
 			std::cout << "ma3\n";
 		}
 	}

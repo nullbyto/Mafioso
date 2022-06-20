@@ -2,6 +2,16 @@
 
 #include <string>
 
+#define R_NONE 0
+#define R_VILLAGER 1
+#define R_DOCTOR 2
+#define R_COP 3
+#define R_ESCORT 4
+#define R_ARMSDEALER 5
+#define R_GODFATHER 6
+#define R_MAFIOSO 7
+#define R_JESTER 8
+
 class Role
 {
 public:

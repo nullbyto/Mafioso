@@ -11,9 +11,7 @@
 #define DEFAULT_BUFLEN 1024
 
 int send_data(SOCKET& ConnectSocket, const char* sendbuf) {
-	int recvbuflen = DEFAULT_BUFLEN;
-
-	int iResult;
+	int iResult = 0;
 
 	// Send an initial buffer
 	iResult = send(ConnectSocket, sendbuf, (int)strlen(sendbuf), 0);
@@ -40,7 +38,7 @@ void shutdown_send(SOCKET &ConnectSocket) {
 }
 
 int recieve_data(SOCKET& ConnectSocket, std::vector<char> &buf) {
-	return recv(ConnectSocket, &buf[0], buf.size(), 0);
+	return recv(ConnectSocket, &buf[0], (int)buf.size(), 0);
 }
 
 SOCKET connect() {
