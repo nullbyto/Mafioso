@@ -300,6 +300,11 @@ void recieve_setup(SOCKET ConnectSocket) {
 
     room_json_str.append(room_buf.cbegin(), room_buf.cend());
 
+    if (room_json_str.substr(0, 2) == "!#") {
+        done_setup = -1;
+        return;
+    }
+
     json room_json = json::parse(room_json_str);
     roomJSON = room_json;
 
@@ -337,7 +342,7 @@ int wait_for_setup() {
     std::string reset_position;
     for (int index = 0; index < 1000; ++index) {
         // Check if setup recieved
-        if (done_setup > 0) {
+        if (done_setup == 1 || done_setup == -1) {
             return done_setup;
         }
 
@@ -621,6 +626,9 @@ void handle_player () {
         auto future = std::async(std::launch::async, recieve_setup, std::ref(ConnectSocket));
         if (!wait_for_setup()) {
             return;
+        }
+        if (done_setup == -1) {
+            room_setup(ConnectSocket);
         }
     }
     std::string joined_msg = FLAG_CHAT;

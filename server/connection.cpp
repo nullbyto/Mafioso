@@ -22,10 +22,11 @@ using json = nlohmann::json;
 #define SERVER_IP "127.0.0.1"
 #define DEFAULT_BUFLEN 1024
 
+#define FLAG_FAIL "!#"
 #define FLAG_CHAT "0#"
 #define FLAG_GAME "1#"
 
-static int done = 0;
+static bool done = false;
 static std::mutex done_mutex;
 static SOCKET leader = NULL;
 
@@ -240,7 +241,6 @@ void broadcast_data(std::list<SOCKET> &clients, const char* sendbuf, SOCKET exce
 		if (iResult == SOCKET_ERROR) {
 			printf("send failed: %d\n", WSAGetLastError());
 			closesocket(client);
-			WSACleanup();
 			std::lock_guard<std::mutex> lock(clients_mutex);
 			clients.remove(client);
 			return;
@@ -257,6 +257,7 @@ int recieve_setup(SOCKET ClientSocket, std::list<SOCKET>& clients) {
 	iResult = recieve_data(ClientSocket, room_buf);
 	if (iResult == 0 || iResult == -1) {
 		std::cout << "[" << ip_str << "] disconnected" << std::endl;
+		closesocket(ClientSocket);
 		clients_mutex.lock();
 		clients.remove(ClientSocket);
 		clients_mutex.unlock();
@@ -317,7 +318,6 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 		iResult = recieve_data(ClientSocket, name_buf);
 		if (iResult == 0 || iResult == -1) {
 			closesocket(ClientSocket);
-			WSACleanup();
 			return;
 		}
 	}
@@ -348,32 +348,43 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 	// Recieve room setup info
 	// and broadcast room setup if room already set
 
-	if (clients_count == 1) {
-		{
-			std::lock_guard lockk(done_mutex);
+	{ // lock other clients handlers waiting to recieve the setup
+		std::lock_guard lock(done_mutex);
+		if (!done) {
 			leader = ClientSocket;
 			if (recieve_setup(ClientSocket, clients) > 0) {
 				broadcast_data(clients, roomJSON.dump().data(), ClientSocket);
 				// Set flag to be done so other clients know a room has been created
-				/*done = 1;*/
+				done = true;
+			}
+			// if recieving setup failed cuz of disconnect then choose another client
+			else {
+				if (clients.size() > 0) {
+					auto first_client = clients.begin();
+					std::string failed = FLAG_FAIL;
+					send_data(*first_client, failed.data());
+				}
+				return;
 			}
 		}
-	}
-	else {
-		std::cout << "Done: " << done << std::endl;
-		// Wait until setup is done
-		{
-			std::lock_guard lock(done_mutex);
+		else {
+			// send room json to client if they waiting
+			send_data(ClientSocket, roomJSON.dump().data());
 		}
-		std::cout << "Done: " << done << std::endl;
-		//broadcast_data(clients, roomJSON.dump().data(), leader);
-		send_data(ClientSocket, roomJSON.dump().data());
-
-		//// Broadcast user joining server
-		//std::string joined_msg = CHAT_FLAG;
-		//joined_msg += "[Server]: " + client_name + " joined the server\n";
-		//broadcast_data(clients, joined_msg.data(), leader);
+			
 	}
+	//else {
+	//	// Wait until setup is done
+	//	{
+	//		std::lock_guard lock(done_mutex);
+	//	}
+	//	send_data(ClientSocket, roomJSON.dump().data());
+
+	//	//// Broadcast user joining server
+	//	//std::string joined_msg = CHAT_FLAG;
+	//	//joined_msg += "[Server]: " + client_name + " joined the server\n";
+	//	//broadcast_data(clients, joined_msg.data(), leader);
+	//}
 
 	Player p = Player(client_name, R_NONE);
 	{
@@ -407,7 +418,7 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 			clients.remove(ClientSocket);
 			clients_mutex.unlock();
 			closesocket(ClientSocket);
-			WSACleanup();
+			//WSACleanup();
 
 			std::string joined_msg = FLAG_CHAT;
 			joined_msg += "[Server]: " + client_name + " left the server\n";
