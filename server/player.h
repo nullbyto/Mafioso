@@ -13,8 +13,9 @@ public:
 	int id;
 	role_code role;
 
-	Player();
+	Player() = default;
 	Player(std::string name, role_code role);
+	Player(std::string name, int id, role_code role);
 	~Player() = default;
 
 private:
@@ -22,6 +23,8 @@ private:
 protected:
 	static int next_id;
 };
+
+bool operator==(const Player& a, const Player& b);
 
 //class PlayerClient
 //{

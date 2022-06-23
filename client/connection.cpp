@@ -10,7 +10,7 @@
 #define SERVER_IP "127.0.0.1"
 #define DEFAULT_BUFLEN 1024
 
-int send_data(SOCKET& ConnectSocket, const char* sendbuf) {
+int send_data(SOCKET ConnectSocket, const char* sendbuf) {
 	int iResult = 0;
 
 	// Send an initial buffer
@@ -25,7 +25,7 @@ int send_data(SOCKET& ConnectSocket, const char* sendbuf) {
 	return iResult;
 }
 
-void shutdown_send(SOCKET &ConnectSocket) {
+void shutdown_send(SOCKET ConnectSocket) {
 	/*shutdown the connection for sending since no more data will be sent
 	the client can still use the ConnectSocket for receiving data*/
 	int iResult = shutdown(ConnectSocket, SD_SEND);
@@ -35,10 +35,6 @@ void shutdown_send(SOCKET &ConnectSocket) {
 		WSACleanup();
 		return;
 	}
-}
-
-int recieve_data(SOCKET& ConnectSocket, std::vector<char> &buf) {
-	return recv(ConnectSocket, &buf[0], (int)buf.size(), 0);
 }
 
 SOCKET connect() {
@@ -105,7 +101,7 @@ SOCKET connect() {
 	return ConnectSocket;
 }
 
-void disconnect(SOCKET &ConnectSocket) {
+void disconnect(SOCKET ConnectSocket) {
 	// shutdown the send half of the connection since no more data will be sent
 	int iResult = shutdown(ConnectSocket, SD_SEND);
 	if (iResult == SOCKET_ERROR) {

@@ -52,12 +52,17 @@ using json = nlohmann::json;
 
 // -- Globals -------------------------------
 
+#define FLAG_FAIL "!#"
 #define FLAG_CHAT "0#"
 #define FLAG_GAME "1#"
+#define FLAG_INFO "2#"
+#define FLAG_ROOM "3#"
 
 static SOCKET server_sock = NULL;
 
 static int done_setup = 0;
+static int done_name = 0;
+static int ddd = 0;
 static std::mutex mu;
 
 static int chat_msgs_selected = 0;
@@ -67,7 +72,8 @@ static std::vector<std::string> chat_msgs = {};
 static std::string player_name;
 static Room room = {};
 static nlohmann::json roomJSON;
-static std::list<Player> players {};
+static std::list<Player> players = {};
+static std::vector<std::string> players_list = {};
 
 // -----------------------------------------
 
@@ -109,6 +115,68 @@ Element IndependentString(int jest) {
 
 // #############################################################
 // #############################################################
+
+void parse_room_json(std::string room_json_str) {
+    if (room_json_str.substr(0, 2) == FLAG_FAIL) {
+        done_setup = -1;
+        return;
+    }
+    room_json_str = room_json_str.substr(2, room_json_str.size());
+
+    json room_json;
+    try {
+         room_json = json::parse(room_json_str);
+    }
+    catch (json::parse_error& ex) {
+        std::cout << "Error parsing room json.\n";
+        exit(0);
+    }
+
+    roomJSON = room_json;
+ 
+    Roles roles = {
+        room_json["roles"]["villager"],
+        room_json["roles"]["doctor"],
+        room_json["roles"]["cop"],
+        room_json["roles"]["escort"],
+        room_json["roles"]["armsdealer"],
+        room_json["roles"]["godfather"],
+        room_json["roles"]["mafioso"],
+        room_json["roles"]["jester"],
+    };
+
+    Settings settings = {
+        room_json["settings"]["day_length"],
+        room_json["settings"]["night_length"],
+        room_json["settings"]["last_will"],
+        room_json["settings"]["no_reveal"],
+        room_json["settings"]["day_start"],
+    };
+
+    //std::cout << room_json_str << std::endl;
+
+    room.roles = roles;
+    room.settings = settings;
+
+    // Parse players list from json
+    for (int i = 0; i < room_json["players"].size(); i++) {
+        std::string name = room_json["players"][i]["name"];
+        int id = room_json["players"][i]["id"];
+        role_code role = room_json["players"][i]["role"];
+        Player p;
+        p.name = name;
+        p.id = id;
+        p.role = role;
+
+        // Check if player already exists in the list
+        bool found = std::find(players_list.begin(), players_list.end(), name) != players_list.end();
+        if (!found) {
+            room.players.push_back(p);
+            players_list.push_back(p.name);
+        }
+    }
+    players = room.players;
+}
 
 void room_setup(SOCKET ConnectSocket) {
     /////////////////////////////////////////////////////////////////
@@ -282,7 +350,7 @@ void room_setup(SOCKET ConnectSocket) {
     // Send JSON
 
     auto room_json_str = room_json.dump();
-    std::cout << room_json_str << std::endl;
+    //std::cout << room_json_str << std::endl;
 
     if (send_data(ConnectSocket, room_json_str.data()) <= 0)
         return;
@@ -292,7 +360,7 @@ void recieve_setup(SOCKET ConnectSocket) {
     std::vector<char> room_buf(1024);
     std::string room_json_str;
     int iResult = 0;
-    iResult = recieve_data(ConnectSocket, room_buf);
+    iResult = recv(ConnectSocket, room_buf.data(), room_buf.size(), 0);
     if (iResult == 0 || iResult == -1) {
         std::cout << "Lost connection to server!" << std::endl;
         return;
@@ -300,38 +368,9 @@ void recieve_setup(SOCKET ConnectSocket) {
 
     room_json_str.append(room_buf.cbegin(), room_buf.cend());
 
-    if (room_json_str.substr(0, 2) == "!#") {
-        done_setup = -1;
-        return;
-    }
+    parse_room_json(room_json_str);
 
-    json room_json = json::parse(room_json_str);
-    roomJSON = room_json;
-
-    Roles roles = {
-        room_json["roles"]["villager"],
-        room_json["roles"]["doctor"],
-        room_json["roles"]["cop"],
-        room_json["roles"]["escort"],
-        room_json["roles"]["armsdealer"],
-        room_json["roles"]["godfather"],
-        room_json["roles"]["mafioso"],
-        room_json["roles"]["jester"],
-    };
-
-    Settings settings = {
-        room_json["settings"]["day_length"],
-        room_json["settings"]["night_length"],
-        room_json["settings"]["last_will"],
-        room_json["settings"]["no_reveal"],
-        room_json["settings"]["day_start"],
-    };
-
-    //std::cout << room_json_str << std::endl;
-    
-    room.roles = roles;
-    room.settings = settings;
-
+    // Signal done setup to the waiting screen which its thread reads
     done_setup = 1;
 }
 
@@ -340,7 +379,7 @@ int wait_for_setup() {
     using namespace std::chrono_literals;
 
     std::string reset_position;
-    for (int index = 0; index < 1000; ++index) {
+    for (int index = 0; index < 100; ++index) {
         // Check if setup recieved
         if (done_setup == 1 || done_setup == -1) {
             return done_setup;
@@ -352,15 +391,20 @@ int wait_for_setup() {
                 spinner(20, index) | bold,
                 })
         );
-        
-        auto document = hbox({
+
+        auto document = vbox({
             hbox({
-                text("Waiting for leader to setup room!") | ftxui::border | flex,
+                hbox({
+                    text("Connected! Waiting for the leader to setup room!"),
+                }) | ftxui::border,
+                vbox(std::move(entries)) | flex,
             }),
-            vbox(std::move(entries)) | flex,
             }) | flex;
+
         auto screen = Screen::Create(Dimension::Full(), Dimension::Fit(document));
-        Render(screen, document);
+
+        ftxui::Render(screen, document);
+
         std::cout << reset_position;
         screen.Print();
         reset_position = screen.ResetPosition();
@@ -383,22 +427,33 @@ void handle_data() {
         std::vector<char> data_buf(1024);
         std::string data;
         int iResult = 0;
-        iResult = recieve_data(server_sock, data_buf);
+        
+        iResult = recv(server_sock, data_buf.data(), data_buf.size(), 0);
+        
         if (iResult == 0 || iResult == -1) {
             std::cout << "Lost connection to server!" << std::endl;
             return;
         }
         data.append(data_buf.cbegin(), data_buf.cend());
+        std::string data_raw = data.substr(2, data.size());
 
         auto prefix = data.substr(0, 2);
 
         if (prefix == FLAG_CHAT) {
-            chat_msgs.push_back(data.substr(2, data.size()));
+            chat_msgs.push_back(data_raw);
             // Change selected msg in chat to scroll focus to bottom
             chat_msgs_selected = (int)chat_msgs.size() - 1;
         }
         else if (prefix == FLAG_GAME) {
             std::cout << "ma3\n";
+        }
+        else if (prefix == FLAG_INFO) {
+            parse_room_json(data);
+            done_setup = 1;
+        }
+        else if (prefix == FLAG_ROOM) {
+            parse_room_json(data);
+            done_setup = 1;
         }
     }
 
@@ -460,15 +515,13 @@ void start_game() {
         input_lastwill_6,
         });
 
-    //auto lastwill_window = window(text("Last will"), input_lastwill->Render());
-
     // -- Players list --------------------------------------------
 
     int player_alive_selected = 0;
-    auto players_alive_menu = Menu(&entries, &player_alive_selected);
+    auto players_alive_menu = Menu(&players_list, &player_alive_selected);
 
     int player_dead_selected = 0;
-    auto players_dead_menu = Menu(&entries, &player_dead_selected);
+    auto players_dead_menu = Menu(&players_list, &player_dead_selected);
 
     // -- Chat 
 
@@ -571,37 +624,50 @@ void handle_player () {
     /////////////////////////////////////////////////////////////////
     // Input and send name
 
-    std::string name_buf;
-    auto screen_name = ScreenInteractive::TerminalOutput();
-    InputOption option_input;
-    option_input.on_enter = screen_name.ExitLoopClosure();
-    Component input_name = Input(&name_buf, "your name here", option_input);
+    while (!done_name) {
+        std::string name_buf;
+        auto screen_name = ScreenInteractive::TerminalOutput();
+        InputOption option_input;
+        option_input.on_enter = screen_name.ExitLoopClosure();
+        Component input_name = Input(&name_buf, "your name here", option_input);
 
-    auto component_input = Container::Vertical({
-        input_name,
-    });
+        auto component_input = Container::Vertical({
+            input_name,
+            });
+        auto renderer = Renderer(component_input, [&] {
+            return vbox({
+                       hbox({
+                            text("Hello "),
+                            text(name_buf) | underlined,
+                            text(". Welcome to Mafioso!"),
+                       }) | bold,
+                       separator(),
+                       hbox(text("Player name: "), input_name->Render()),
+                }) |
+                border;
+            });
 
-    auto renderer = Renderer(component_input, [&] {
-        return vbox({
-                   hbox({
-                        text("Hello "),
-                        text(name_buf) | underlined,
-                        text(". Welcome to Mafioso!"),
-                   }) | bold,
-                   separator(),
-                   hbox(text("Player name: "), input_name->Render()),
-            }) |
-            border;
-    });
-    screen_name.Loop(renderer);
+        screen_name.Loop(renderer);
 
-    player_name = name_buf;
+        system("cls");
 
-    system("cls");
+        if (send_data(ConnectSocket, name_buf.data()) <= 0)
+            return;
 
-    if (send_data(ConnectSocket, name_buf.data()) <= 0)
-        return;
+        int done_buf = 0;
+        int iResult = 0;
+        iResult = recv(ConnectSocket, (char*)&done_buf, sizeof(done_buf), 0);
+        if (iResult == 0 || iResult == -1) {
+            std::cout << "Lost connection to server!" << std::endl;
+            return;
+        }
 
+        if (done_buf == 1) {
+            done_name = true;
+            player_name = name_buf;
+        }
+    }
+    
     /////////////////////////////////////////////////////////////////
     // Recieve info about room
 
@@ -614,26 +680,27 @@ void handle_player () {
     }
     int clients_count = clients_buf;
 
-    //std::cout << "Clients count = " << clients_count << std::endl;
-
     /////////////////////////////////////////////////////////////////
+
+    auto future = std::async(std::launch::async, handle_data);
 
     if (clients_count == 1) {
         room_setup(ConnectSocket);
+        //recieve_setup(ConnectSocket); // recieve setup with player info
         //start_game();
     }
     else if (done_setup == 0) {
-        auto future = std::async(std::launch::async, recieve_setup, std::ref(ConnectSocket));
+        ddd = 1;
+        //auto future = std::async(std::launch::async, recieve_setup, std::ref(ConnectSocket));
         if (!wait_for_setup()) {
+            disconnect(server_sock);
             return;
         }
         if (done_setup == -1) {
             room_setup(ConnectSocket);
         }
     }
-    std::string joined_msg = FLAG_CHAT;
-    joined_msg += "[Server]: " + player_name + " joined the server\n";
-    send_data(server_sock, joined_msg.data());
-    auto future = std::async(std::launch::async, handle_data);
+
+    //auto future = std::async(std::launch::async, handle_data);
     start_game();
 }

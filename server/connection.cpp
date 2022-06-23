@@ -8,6 +8,8 @@
 #include <mutex>
 #include <map>
 #include <condition_variable>
+#include <future>
+#include <stdlib.h>
 
 #include "nlohmann/json.hpp"
 using json = nlohmann::json;
@@ -25,6 +27,8 @@ using json = nlohmann::json;
 #define FLAG_FAIL "!#"
 #define FLAG_CHAT "0#"
 #define FLAG_GAME "1#"
+#define FLAG_INFO "2#"
+#define FLAG_ROOM "3#"
 
 static bool done = false;
 static std::mutex done_mutex;
@@ -36,6 +40,7 @@ static std::mutex room_mutex;
 
 static std::mutex players_mutex;
 static std::list<Player> players;//////////
+static json players_json;
 
 void disconnect(SOCKET socket, std::list<SOCKET> &clients) {
 	// shutdown the send half of the connection since no more data will be sent
@@ -231,7 +236,6 @@ int send_data(SOCKET ConnectSocket, const char* sendbuf) {
 }
 
 void broadcast_data(std::list<SOCKET> &clients, const char* sendbuf, SOCKET exception) {
-	int recvbuflen = DEFAULT_BUFLEN;
 	int iResult = 0;
 
 	for (auto client : clients) {
@@ -287,19 +291,29 @@ int recieve_setup(SOCKET ClientSocket, std::list<SOCKET>& clients) {
 		room_json["settings"]["day_start"],
 	};
 
-	room_mutex.lock();
-	room.roles = roles;
-	room.settings = settings;
-	roomJSON = room_json;
-	room_mutex.unlock();
+	{
+		std::lock_guard lock(room_mutex);
+		room.roles = roles;
+		room.settings = settings;
+		roomJSON = room_json;
+	}
 
 	std::cout << room_json_str << std::endl;
 
 	return iResult;
 }
 
+bool is_player_name_taken(std::string name) {
+	for (auto player : players) {
+		if (player.name == name) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void handle_chat(SOCKET ClientSocket, std::string msg, std::list<SOCKET> &clients) {
-	std::string raw_msg = msg.substr(2, msg.size());
+	std::string msg_raw = msg.substr(2, msg.size());
 	//std::cout << raw_msg << std::endl;
 	broadcast_data(clients, msg.data(), NULL);
 }
@@ -309,37 +323,67 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 
 	/////////////////////////////////////////////////////////////////
 	// Recieve name
-	
-	std::vector<char> name_buf(512);
-	std::string client_name;
 
+	std::string client_name;
+	int done_name = 0;
 	auto ip_str = getipaddr(ClientSocket, 0);
-	if (iResult <= 0) {
+
+	// Check if player name is taken and send information
+	while (!done_name) {
+		std::vector<char> name_buf(512);
+		client_name = "";
+
+		iResult = 0;
 		iResult = recieve_data(ClientSocket, name_buf);
 		if (iResult == 0 || iResult == -1) {
 			closesocket(ClientSocket);
 			return;
 		}
+		client_name.append(name_buf.cbegin(), name_buf.cend());
+		client_name.erase(std::find(client_name.begin(), client_name.end(), '\0'), client_name.end());
+
+		if (!is_player_name_taken(client_name)) {
+			done_name = 1;
+		}
+		iResult = send(ClientSocket, (char*)&done_name, sizeof(done_name), 0);
+		if (iResult == 0) {
+			std::cout << "[" << ip_str << "] disconnected" << std::endl;
+			{
+				std::lock_guard lock(clients_mutex);
+				clients.remove(ClientSocket);
+			}
+			return;
+		}
 	}
-	client_name.append(name_buf.cbegin(), name_buf.cend());
-	client_name.erase(std::find(client_name.begin(), client_name.end(), '\0'), client_name.end());
 	std::cout << "[" << ip_str << "] " << client_name << " joined the server" << std::endl;
+
+	// Add player struct to json
+	Player p = Player(client_name, R_NONE);
+	json p_json = {
+		{"name", p.name}, {"id", p.id}, {"role", p.role}
+	};
+	{
+		std::lock_guard lock(players_mutex);
+		players.push_back(p);
+	}
 
 	/////////////////////////////////////////////////////////////////
 	// Send room info
 
-	clients_mutex.lock();
-	clients.push_back(ClientSocket);
+	{
+		std::lock_guard lock(clients_mutex);
+		clients.push_back(ClientSocket);
+	}
 	int clients_count = (int)clients.size();
-	clients_mutex.unlock();
 
 	iResult = 0;
 	iResult = send(ClientSocket, (char*)&clients_count, sizeof(clients_count), 0);
 	if (iResult == 0) {
 		std::cout << "[" << ip_str << "] disconnected" << std::endl;
-		clients_mutex.lock();
-		clients.remove(ClientSocket);
-		clients_mutex.unlock();
+		{
+			std::lock_guard lock(clients_mutex);
+			clients.remove(ClientSocket);
+		}
 		return;
 	}
 
@@ -353,7 +397,10 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 		if (!done) {
 			leader = ClientSocket;
 			if (recieve_setup(ClientSocket, clients) > 0) {
-				broadcast_data(clients, roomJSON.dump().data(), ClientSocket);
+				
+				//broadcast_data(clients, roomJSON.dump().data(), ClientSocket);
+				//send_data(ClientSocket, roomJSON.dump().data()); // send updated setup to client
+
 				// Set flag to be done so other clients know a room has been created
 				done = true;
 			}
@@ -367,12 +414,32 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 				return;
 			}
 		}
-		else {
-			// send room json to client if they waiting
-			send_data(ClientSocket, roomJSON.dump().data());
-		}
-			
+		//else {
+		//	// send room json to client if they waiting
+		//	send_data(ClientSocket, roomJSON.dump().data());
+		//}
 	}
+
+	{
+		std::lock_guard lock(room_mutex);
+		room.players = players;
+		roomJSON["players"] += p_json;
+	}
+	// Send updated roomJSON with players
+	std::string room_json_str = FLAG_INFO;
+	room_json_str += roomJSON.dump();
+	//auto future = std::async(broadcast_data, std::ref(clients), room_json_str.data(), NULL);
+	//send_data(ClientSocket, room_json_str.data());
+	broadcast_data(clients, room_json_str.data(), NULL);
+
+	// This is to temp "fix" recieving/sending data streams to not get mixed up together
+	using namespace std::chrono_literals;
+	std::this_thread::sleep_for(0.001s);
+
+	std::string joined_msg = FLAG_CHAT;
+	joined_msg += "[Server]: " + client_name + " joined the server\n";
+	broadcast_data(clients, joined_msg.data(), NULL);
+	
 	//else {
 	//	// Wait until setup is done
 	//	{
@@ -386,22 +453,24 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 	//	//broadcast_data(clients, joined_msg.data(), leader);
 	//}
 
-	Player p = Player(client_name, R_NONE);
-	{
-		std::lock_guard lock(players_mutex);
-		players.push_back(p);
-	}
-	{
-		std::lock_guard lock(room_mutex);
-		room.players = players;
-	}
-
-	json p_json = {
-		{"name", p.name}, {"id", p.id}, {"role", p.role}
-	};
-
-	roomJSON["players"] += p_json;
-	std::cout << roomJSON.dump() << std::endl;
+	//// Add player struct to json
+	//Player p = Player(client_name, R_NONE);
+	//json p_json = {
+	//	{"name", p.name}, {"id", p.id}, {"role", p.role}
+	//};
+	//{
+	//	std::lock_guard lock(players_mutex);
+	//	players.push_back(p);
+	//}
+	//{
+	//	std::lock_guard lock(room_mutex);
+	//	room.players = players;
+	//	roomJSON["players"] += p_json;
+	//}
+	//players_json += p_json;
+	//auto pl = players_json.get<std::string>("players");
+	//std::cout << roomJSON.dump() << std::endl;
+	//std::cout << players_json.size() << std::endl;
 
 	/////////////////////////////////////////////////////////////////
 	// Loop gamestate + chat
@@ -411,26 +480,28 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 		std::string data;
 
 		iResult = 0;
-		iResult = recieve_data(ClientSocket, data_buf);
+		iResult = recv(ClientSocket, data_buf.data(), data_buf.size(), 0);
 		if (iResult == 0 || iResult == -1) {
 			std::cout << "[" << ip_str << "] disconnected" << std::endl;
-			clients_mutex.lock();
-			clients.remove(ClientSocket);
-			clients_mutex.unlock();
+			{
+				std::lock_guard lock(clients_mutex);
+				clients.remove(ClientSocket);
+			}
 			closesocket(ClientSocket);
-			//WSACleanup();
 
-			std::string joined_msg = FLAG_CHAT;
-			joined_msg += "[Server]: " + client_name + " left the server\n";
+			std::string left_msg = FLAG_CHAT;
+			left_msg += "[Server]: " + client_name + " left the server\n";
 
-			/*players_mutex.lock();
-			players.remove(p);
-			players_mutex.unlock();*/
+			{
+				std::lock_guard lock(players_mutex);
+				players.remove(p);
+			}
 
-			broadcast_data(clients, joined_msg.data(), NULL);
+			broadcast_data(clients, left_msg.data(), NULL);
 			return;
 		}
 		data.append(data_buf.cbegin(), data_buf.cend());
+		std::string data_raw = data.substr(2, data.size());
 
 		auto prefix = data.substr(0, 2);
 
@@ -439,6 +510,9 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 		}
 		else if (prefix == FLAG_GAME) {
 			std::cout << "ma3\n";
+		}
+		else if (prefix == FLAG_INFO) {
+			broadcast_data(clients, data.data(), NULL);
 		}
 	}
 
