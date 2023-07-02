@@ -16,6 +16,8 @@ In progress:
 
 ## Showcase Progress
 
+https://github.com/nullbyto/Mafioso/assets/67614151/d07018c0-b789-4934-950c-046e23fe3ce9
 
-https://github.com/nullbyto/Mafioso/assets/67614151/27e611eb-f9d1-407e-9319-5568ca916e64
+
+
 
