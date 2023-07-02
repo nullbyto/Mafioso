@@ -521,7 +521,7 @@ void start_game() {
     auto players_alive_menu = Menu(&players_list, &player_alive_selected);
 
     int player_dead_selected = 0;
-    auto players_dead_menu = Menu(&players_list, &player_dead_selected);
+    auto players_dead_menu = Menu(&entries, &player_dead_selected);
 
     // -- Chat 
 
