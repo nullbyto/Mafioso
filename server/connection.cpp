@@ -397,10 +397,6 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 		if (!done) {
 			leader = ClientSocket;
 			if (recieve_setup(ClientSocket, clients) > 0) {
-				
-				//broadcast_data(clients, roomJSON.dump().data(), ClientSocket);
-				//send_data(ClientSocket, roomJSON.dump().data()); // send updated setup to client
-
 				// Set flag to be done so other clients know a room has been created
 				done = true;
 			}
@@ -414,10 +410,6 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 				return;
 			}
 		}
-		//else {
-		//	// send room json to client if they waiting
-		//	send_data(ClientSocket, roomJSON.dump().data());
-		//}
 	}
 
 	{
@@ -425,52 +417,19 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 		room.players = players;
 		roomJSON["players"] += p_json;
 	}
-	// Send updated roomJSON with players
+	// Broadcast updated roomJSON with players
 	std::string room_json_str = FLAG_INFO;
 	room_json_str += roomJSON.dump();
-	//auto future = std::async(broadcast_data, std::ref(clients), room_json_str.data(), NULL);
-	//send_data(ClientSocket, room_json_str.data());
 	broadcast_data(clients, room_json_str.data(), NULL);
 
 	// This is to temp "fix" recieving/sending data streams to not get mixed up together
 	using namespace std::chrono_literals;
 	std::this_thread::sleep_for(0.001s);
 
+	// Broadcast joined msg
 	std::string joined_msg = FLAG_CHAT;
 	joined_msg += "[Server]: " + client_name + " joined the server\n";
 	broadcast_data(clients, joined_msg.data(), NULL);
-	
-	//else {
-	//	// Wait until setup is done
-	//	{
-	//		std::lock_guard lock(done_mutex);
-	//	}
-	//	send_data(ClientSocket, roomJSON.dump().data());
-
-	//	//// Broadcast user joining server
-	//	//std::string joined_msg = CHAT_FLAG;
-	//	//joined_msg += "[Server]: " + client_name + " joined the server\n";
-	//	//broadcast_data(clients, joined_msg.data(), leader);
-	//}
-
-	//// Add player struct to json
-	//Player p = Player(client_name, R_NONE);
-	//json p_json = {
-	//	{"name", p.name}, {"id", p.id}, {"role", p.role}
-	//};
-	//{
-	//	std::lock_guard lock(players_mutex);
-	//	players.push_back(p);
-	//}
-	//{
-	//	std::lock_guard lock(room_mutex);
-	//	room.players = players;
-	//	roomJSON["players"] += p_json;
-	//}
-	//players_json += p_json;
-	//auto pl = players_json.get<std::string>("players");
-	//std::cout << roomJSON.dump() << std::endl;
-	//std::cout << players_json.size() << std::endl;
 
 	/////////////////////////////////////////////////////////////////
 	// Loop gamestate + chat
@@ -488,16 +447,30 @@ void handle_client(SOCKET ClientSocket, std::list<SOCKET> &clients) {
 				clients.remove(ClientSocket);
 			}
 			closesocket(ClientSocket);
-
-			std::string left_msg = FLAG_CHAT;
-			left_msg += "[Server]: " + client_name + " left the server\n";
-
+			
 			{
 				std::lock_guard lock(players_mutex);
 				players.remove(p);
 			}
 
+			std::string left_msg = FLAG_CHAT;
+			left_msg += "[Server]: " + client_name + " left the server\n";
+
 			broadcast_data(clients, left_msg.data(), NULL);
+
+			// ########################################!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			// CONTINUE HERE
+			// broadcast player left to update player list.
+			// ########################################!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+			//// This is to temp "fix" recieving/sending data streams to not get mixed up together
+			//using namespace std::chrono_literals;
+			//std::this_thread::sleep_for(0.001s);
+
+			//// Broadcast updated roomJSON with updated players
+			//std::string room_json_str = FLAG_INFO;
+			//room_json_str += roomJSON.dump();
+			//broadcast_data(clients, room_json_str.data(), NULL);
 			return;
 		}
 		data.append(data_buf.cbegin(), data_buf.cend());
