@@ -1,0 +1,15 @@
+# CMake generation dependency list for this directory.
+C:/Program Files/CMake/share/cmake-3.23/Modules/CMakeFindDependencyMacro.cmake
+C:/Program Files/CMake/share/cmake-3.23/Modules/CheckCSourceCompiles.cmake
+C:/Program Files/CMake/share/cmake-3.23/Modules/CheckIncludeFile.c.in
+C:/Program Files/CMake/share/cmake-3.23/Modules/CheckIncludeFile.cmake
+C:/Program Files/CMake/share/cmake-3.23/Modules/CheckLibraryExists.cmake
+C:/Program Files/CMake/share/cmake-3.23/Modules/FindPackageHandleStandardArgs.cmake
+C:/Program Files/CMake/share/cmake-3.23/Modules/FindPackageMessage.cmake
+C:/Program Files/CMake/share/cmake-3.23/Modules/FindThreads.cmake
+C:/Program Files/CMake/share/cmake-3.23/Modules/Internal/CheckSourceCompiles.cmake
+C:/Users/Amin/Git/nullbyto/Mafioso/client/CMakeLists.txt
+C:/dev/vcpkg/installed/x64-windows/share/ftxui/ftxui-config-version-debug.cmake
+C:/dev/vcpkg/installed/x64-windows/share/ftxui/ftxui-config-version-release.cmake
+C:/dev/vcpkg/installed/x64-windows/share/ftxui/ftxui-config-version.cmake
+C:/dev/vcpkg/installed/x64-windows/share/ftxui/ftxui-config.cmake

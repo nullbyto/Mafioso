@@ -1,0 +1,4 @@
+C:/Users/Amin/Git/nullbyto/Mafioso/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/Amin/Git/nullbyto/Mafioso/build/CMakeFiles/ZERO_CHECK.dir
+C:/Users/Amin/Git/nullbyto/Mafioso/build/client/CMakeFiles/client.dir
+C:/Users/Amin/Git/nullbyto/Mafioso/build/server/CMakeFiles/server.dir
